@@ -206,7 +206,7 @@ async function zeigen() {
   const ziel = $("#inhalt");
   ziel.classList.add("laden");
   try {
-    ziel.innerHTML = await ({ start: seiteStart, geld: seiteGeld, kueche: seiteKueche, filme: seiteFilme, rezept: seiteRezept, faehig: seiteFaehig, sport: seiteSport, leute: seiteLeute, urlaub: seiteUrlaub }[seite] || seiteStart)();
+    ziel.innerHTML = await ({ start: seiteStart, geld: seiteGeld, kueche: seiteKueche, filme: seiteFilme, rezept: seiteRezept, faehig: seiteFaehig, sport: seiteSport, leute: seiteLeute, urlaub: seiteUrlaub, ich: seiteIch }[seite] || seiteStart)();
   } catch (e) {
     if (e.message === "ANMELDEN") return zeigeLogin();
     ziel.innerHTML = karte("", `<p class="fehler">${esc(e.message)}</p><button class="knopf" onclick="zeigen()">Nochmal</button>`);
@@ -227,6 +227,9 @@ async function seiteStart() {
   if ((u.erinnerungen || []).length) h += karte("Erinnerungen", u.erinnerungen.map((e) => zeile("⏰ " + esc(e.text),
     `${e.wochentag} ${e.faellig_am.slice(8, 10)}.${e.faellig_am.slice(5, 7)}. ${e.faellig_am.slice(11)}` + (e.wiederholung ? " · " + esc(e.wiederholung) : ""),
     tun("✓", "erinnerung_aendern", { id: e.id, status: "erledigt" }))).join(""));
+  h += karte("Wie geht's dir heute?", `<div style="display:flex;justify-content:space-between">` +
+    ["😫", "😕", "😐", "🙂", "😄"].map((e, i) => tun(`<span style="font-size:24px">${e}</span>`, "gesundheit_erfassen", { stimmung: i + 1 })).join("") +
+    `</div>` + zeile("Mehr: Schlaf, Energie, Trends, was ich über dich weiß", "", "›", "leise", 'data-seite="ich"'));
   if (fr && fr.heute) h += karte("Frage an dich", `<p style="margin:0 0 8px">${esc(fr.heute.frage)}</p>` +
     (fr.heute.warum ? `<p class="hinweis" style="margin-top:-4px">${esc(fr.heute.warum)}</p>` : "") +
     `<form class="formular" data-form="frage"><input type="hidden" name="id" value="${esc(fr.heute.id)}"><input name="antwort" placeholder="Deine Antwort" autocomplete="off" style="flex:1 1 100%">` +
@@ -440,6 +443,29 @@ function kalender(monat, u, reisen) {
   return karte("Kalender", h);
 }
 
+async function seiteIch() {
+  $("#titel").textContent = "Ich";
+  const [g, fr] = await Promise.all([werkzeug("gesundheit_anzeigen"), werkzeug("fragen_anzeigen")]);
+  const sterne = (n, feld, icons) => `<div style="display:flex;justify-content:space-between">` +
+    icons.map((e, i) => tun(`<span style="font-size:22px">${e}</span>`, "gesundheit_erfassen", { [feld]: i + 1 })).join("") + `</div>`;
+  let h = `<p><a href="#start" style="color:var(--akzent)">‹ Zurück</a></p>`;
+  h += karte("Heute", `<p class="hinweis">Stimmung</p>` + sterne(0, "stimmung", ["😫", "😕", "😐", "🙂", "😄"]) +
+    `<p class="hinweis">Energie</p>` + sterne(0, "energie", ["🪫", "😴", "😐", "⚡", "🚀"]) +
+    `<p class="hinweis">Schlafqualität</p>` + sterne(0, "schlaf_qualitaet", ["😵", "🥱", "😐", "😌", "😴"]) +
+    `<form class="formular" data-form="gesundheit" style="margin-top:10px"><input name="schlaf_h" inputmode="decimal" placeholder="Schlaf in Stunden" style="flex:1 1 40%">` +
+    `<input name="gewicht_kg" inputmode="decimal" placeholder="Gewicht kg" style="flex:1 1 40%"><button class="mini" style="flex:1 1 100%">Speichern</button></form>`);
+  const s7 = g.letzte_7, s30 = g.letzte_30;
+  const z = (x) => (x === undefined || x === null ? "–" : String(x).replace(".", ","));
+  if (s7) h += karte("Schnitt", zeile("", "7 Tage", "30 Tage", "leise") +
+    zeile("Schlaf", "", `${z(s7.schlaf)} h · ${z(s30?.schlaf)} h`) + zeile("Stimmung", "", `${z(s7.stimmung)} · ${z(s30?.stimmung)}`) +
+    zeile("Energie", "", `${z(s7.energie)} · ${z(s30?.energie)}`) +
+    (g.gewicht ? zeile("Gewicht", g.gewicht.vor_30_tagen ? "vor 30 Tagen " + z(g.gewicht.vor_30_tagen) + " kg" : "", z(g.gewicht.aktuell) + " kg") : "") +
+    (g.sport_und_schlaf ? `<p class="hinweis">${esc(g.sport_und_schlaf.replace(/(\d)\.(\d)/g, "$1,$2"))}</p>` : ""));
+  if (fr.beantwortet.length) h += karte("Was ich über dich weiß", fr.beantwortet.map((x) => zeile(esc(x.antwort), esc(x.frage), "")).join(""));
+  if (fr.offen.length) h += karte("Offene Fragen", `<p class="hinweis">${fr.offen.length} Fragen warten – im Chat: „Stell mir ein paar Fragen“</p>`);
+  return h;
+}
+
 async function seiteUrlaub() {
   $("#titel").textContent = "Urlaub & Reisen";
   const monat = zustand.kalMonat || new Date().toISOString().slice(0, 7);
@@ -647,6 +673,11 @@ document.addEventListener("submit", async (ev) => {
     const t = (d.text || "").trim();
     if (!t) return;
     [name, args, ok] = ["einkauf_hinzufuegen", { eintraege: t.split(/\s*,\s*/).filter(Boolean).map((x) => ({ produkt: x, text: x })) }, "Auf der Liste ✓"];
+  } else if (f.dataset.form === "gesundheit") {
+    const zahl = (x) => (x && String(x).trim() ? parseFloat(String(x).replace(",", ".")) : undefined);
+    const a = { schlaf_h: zahl(d.schlaf_h), gewicht_kg: zahl(d.gewicht_kg) };
+    if (a.schlaf_h === undefined && a.gewicht_kg === undefined) return toast("Bitte Schlaf oder Gewicht eintragen");
+    [name, args, ok] = ["gesundheit_erfassen", Object.fromEntries(Object.entries(a).filter(([, v]) => v !== undefined)), "Gespeichert ✓"];
   } else if (f.dataset.form === "frage") {
     if (!(d.antwort || "").trim()) return toast("Antwort fehlt");
     [name, args, ok] = ["frage_beantworten", { id: d.id, antwort: d.antwort.trim() }, "Danke, gemerkt ✓"];
