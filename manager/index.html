@@ -385,7 +385,8 @@ const SPORT = { laufen: "🏃 Laufen", rad: "🚴 Rad", kraft: "💪 Kraft dahei
 
 async function seiteUrlaub() {
   $("#titel").textContent = "Urlaub & Reisen";
-  const [u, r, b] = await Promise.all([werkzeug("urlaub_anzeigen"), werkzeug("reisen_anzeigen"), werkzeug("brueckentage", { max_tage: 3 })]);
+  const [u, r, b, fl] = await Promise.all([werkzeug("urlaub_anzeigen"), werkzeug("reisen_anzeigen"), werkzeug("brueckentage", { max_tage: 3 }),
+    werkzeug("flug_funde", { anzahl: 6 }).catch(() => ({ funde: [] }))]);
   const zahl = (x) => String(x).replace(".", ",");
   let h = `<p><a href="#start" style="color:var(--akzent)">‹ Zurück</a></p>`;
   h += karte(`Urlaub ${u.jahr}`, `<div class="gross ${u.noch_frei > 0 ? "plus" : ""}">${zahl(u.noch_frei)} Tage frei</div>` +
@@ -399,6 +400,12 @@ async function seiteUrlaub() {
   if (ab.length) h += karte("Eingetragen", ab.map((a) => zeile(esc({ urlaub: "Urlaub", halber_tag: "½ Tag", gleittag: "Gleittag", frei: "Frei", krank: "Krank" }[a.art]) +
     (a.reise ? ` <span class="leise">${esc(a.reise)}</span>` : ""), datum(a.von) + (a.bis !== a.von ? " – " + datum(a.bis) : "") + " · " + esc(a.status),
     a.urlaubstage ? zahl(a.urlaubstage) + " T." : "", a.status === "geplant" ? "warn" : "")).join(""));
+  if (fl.funde.length) h += karte("✈️ Flug-Kracher", fl.funde.map((f) => zeile(`<a href="${esc(f.link)}" target="_blank" rel="noopener" style="color:inherit">${esc(f.ziel)}</a>`,
+    [f.hin + " – " + f.zurueck, f.naechte ? f.naechte + " N." : "", "ab " + f.ab, f.klima || "", f.suche].filter(Boolean).map(esc).join(" · "),
+    `${esc(f.preis)} <span class="chip ok">${esc(f.ersparnis || "")}</span><br>` +
+    tun("gebucht", "flug_feedback", { fund_id: f.id, status: "gebucht", text: "gebucht " + f.ziel.match(/\(([A-Z]{3})/)[1] }) +
+    tun("nein danke", "flug_feedback", { fund_id: f.id, status: "abgelehnt" }, "", "leise"))).join("") +
+    `<p class="hinweis">Meinung zu Zielen im Chat, z. B. „Malta gefällt mir, Palma war ich schon“.</p>`);
   if (b.length) h += karte("Brückentage", b.slice(0, 5).map((x) => zeile(`${x.urlaubstage} Tag${x.urlaubstage > 1 ? "e" : ""} → ${x.freie_tage} frei`,
     datum(x.von) + " – " + datum(x.bis) + " · " + esc((x.feiertage || []).join(", ")), "", "plus")).join(""));
   if (u.naechste_feiertage) h += karte("Nächste Feiertage", u.naechste_feiertage.map((f) => zeile(esc(f.name), tagkurz(f.tag), "")).join(""));
