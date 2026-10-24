@@ -49,6 +49,16 @@ font-weight:600;cursor:pointer;margin-top:14px}
 .balken{height:6px;border-radius:3px;background:var(--karte2);overflow:hidden;margin-top:5px}
 .balken i{display:block;height:100%;background:var(--akzent)}
 .klick{cursor:pointer}
+.kal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-top:6px}
+.kal .wt{text-align:center;font-size:11px;color:var(--leise);padding-bottom:2px}
+.kt{aspect-ratio:1;min-width:0;padding:0;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;background:var(--karte2);position:relative;cursor:pointer;border:0;color:var(--text)}
+.kt.leer{background:none;cursor:default}
+.kt.we{color:var(--leise)} .kt.ft{color:var(--gelb);font-weight:700}
+.kt.u{background:var(--akzent);color:var(--akzent-text)} .kt.h{background:linear-gradient(135deg,var(--akzent) 50%,var(--karte2) 50%)}
+.kt.k{background:var(--rot);color:#3b0d0d} .kt.g{background:#93B4F5;color:#0d1b3b} .kt.f{background:#5c6370}
+.kt.plan{opacity:.55} .kt.heute{box-shadow:inset 0 0 0 2px var(--text)} .kt.sel{box-shadow:0 0 0 2px var(--gelb)}
+.kt i{position:absolute;bottom:4px;left:7px;right:7px;height:3px;border-radius:2px;background:var(--gelb)}
+.kopf{display:flex;justify-content:space-between;align-items:center}
 .mini{border:0;border-radius:999px;padding:6px 12px;background:var(--karte2);color:var(--akzent);font-size:13.5px;cursor:pointer;margin-left:6px}
 .mini.leise{color:var(--leise)}
 .formular{display:flex;gap:8px;flex-wrap:wrap}
@@ -383,15 +393,53 @@ async function seiteKueche() {
 
 const SPORT = { laufen: "🏃 Laufen", rad: "🚴 Rad", kraft: "💪 Kraft daheim", tennis: "🎾 Tennis", sonstiges: "Sport" };
 
+// Monatskalender: Abwesenheiten farbig, Feiertage gelb, Reisen als Balken; Tag antippen → Details und Eintragen.
+function kalender(monat, u, reisen) {
+  const [j, m] = monat.split("-").map(Number);
+  const tage = new Date(j, m, 0).getDate();
+  const versatz = (new Date(j, m - 1, 1).getDay() + 6) % 7;
+  const heute = new Date().toISOString().slice(0, 10);
+  const iso = (d) => `${monat}-${String(d).padStart(2, "0")}`;
+  const abw = (t) => u.abwesenheiten.find((a) => a.von <= t && a.bis >= t);
+  const reise = (t) => reisen.find((x) => x.von && x.von <= t && x.bis >= t);
+  const KL = { urlaub: "u", halber_tag: "h", krank: "k", gleittag: "g", frei: "f" };
+  let g = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map((w) => `<div class="wt">${w}</div>`).join("") + '<div class="kt leer"></div>'.repeat(versatz);
+  for (let d = 1; d <= tage; d++) {
+    const t = iso(d), a = abw(t), wd = (versatz + d - 1) % 7;
+    const cls = ["kt", wd >= 5 ? "we" : "", u.feiertage?.[t] ? "ft" : "", a ? KL[a.art] : "", a && a.status === "geplant" ? "plan" : "",
+                 t === heute ? "heute" : "", zustand.kalTag === t ? "sel" : ""].filter(Boolean).join(" ");
+    g += `<button class="${cls}" data-kaltag="${t}">${d}${reise(t) ? "<i></i>" : ""}</button>`;
+  }
+  const name = new Date(j, m - 1, 1).toLocaleDateString("de-DE", { month: "long", year: "numeric" });
+  let h = `<div class="kopf"><button class="mini" data-kal="-1">‹</button><b>${esc(name)}</b><button class="mini" data-kal="1">›</button></div><div class="kal">${g}</div>`;
+  const t = zustand.kalTag && zustand.kalTag.startsWith(monat) ? zustand.kalTag : null;
+  if (t) {
+    const a = abw(t), rz = reise(t);
+    h += `<p class="hinweis" style="margin-top:10px"><b>${esc(tagkurz(t))}</b>` + [u.feiertage?.[t], a ? `${{ urlaub: "Urlaub", halber_tag: "½ Urlaubstag", krank: "Krank", gleittag: "Gleittag", frei: "Frei" }[a.art]} (${a.status})` : "",
+      rz ? "✈️ " + rz.name : ""].filter(Boolean).map((x) => " · " + esc(x)).join("") + "</p>";
+    h += a ? tun("Eintrag entfernen", "urlaub_eintragen", { von: a.von, bis: a.bis, entfernen: true }, `${a.von === a.bis ? "Diesen Tag" : "Den ganzen Zeitraum " + datum(a.von) + "–" + datum(a.bis)} entfernen?`, "leise")
+      : tun("Urlaub", "urlaub_eintragen", { von: t }) + tun("½ Tag", "urlaub_eintragen", { von: t, art: "halber_tag" }) +
+        tun("Krank", "urlaub_eintragen", { von: t, art: "krank" }) + tun("Frei", "urlaub_eintragen", { von: t, art: "frei" });
+    if (a && a.status !== "genehmigt" && a.art !== "krank") h += tun("genehmigt", "urlaub_status", { von: a.von, bis: a.bis, status: "genehmigt" });
+  }
+  h += `<p class="hinweis" style="margin-top:8px"><span class="chip ok">■ Urlaub</span><span class="chip" style="color:#93B4F5">■ Gleittag</span>` +
+    `<span class="chip" style="color:var(--rot)">■ krank</span><span class="chip w">Feiertag · ▬ Reise</span> blass = noch nicht beantragt. Längere Zeiträume im Chat.</p>`;
+  return karte("Kalender", h);
+}
+
 async function seiteUrlaub() {
   $("#titel").textContent = "Urlaub & Reisen";
+  const monat = zustand.kalMonat || new Date().toISOString().slice(0, 7);
+  const kalJahr = Number(monat.slice(0, 4));
   const [u, r, b, fl] = await Promise.all([werkzeug("urlaub_anzeigen"), werkzeug("reisen_anzeigen"), werkzeug("brueckentage", { max_tage: 3 }),
     werkzeug("flug_funde", { anzahl: 6 }).catch(() => ({ funde: [] }))]);
+  const uk = kalJahr === u.jahr ? u : await werkzeug("urlaub_anzeigen", { jahr: kalJahr });
   const zahl = (x) => String(x).replace(".", ",");
   let h = `<p><a href="#start" style="color:var(--akzent)">‹ Zurück</a></p>`;
   h += karte(`Urlaub ${u.jahr}`, `<div class="gross ${u.noch_frei > 0 ? "plus" : ""}">${zahl(u.noch_frei)} Tage frei</div>` +
     `<p class="hinweis">Anspruch ${zahl(u.anspruch)} · genommen ${zahl(u.genommen)} · geplant ${zahl(u.geplant)}</p>` +
     (u.rest_verfaellt ? `<p class="warn">${zahl(u.rest_verfaellt.tage)} Tage Resturlaub verfallen am ${datum(u.rest_verfaellt.am)}</p>` : ""));
+  h += kalender(monat, uk, [...r.kommend, ...r.vergangen]);
   if (r.kommend.length) h += karte("Kommende Reisen", r.kommend.map((x) => zeile(esc(x.name),
     [datum(x.von) + " – " + datum(x.bis), (x.mitreisende || []).join(", "), x.budget_cent ? "Budget " + eur(x.budget_cent) : ""].filter(Boolean).map(esc).join(" · "),
     x.in_tagen !== undefined ? `in ${x.in_tagen} T.` : "jetzt", "leise")).join(""));
@@ -596,7 +644,7 @@ document.addEventListener("submit", async (ev) => {
 });
 
 document.addEventListener("click", (ev) => {
-  const z = ev.target.closest("[data-leute],[data-seite],[data-geld],[data-kueche],[data-filme],[data-person],[data-rezept],[data-geh],[data-konto],[data-alle]");
+  const z = ev.target.closest("[data-kal],[data-kaltag],[data-leute],[data-seite],[data-geld],[data-kueche],[data-filme],[data-person],[data-rezept],[data-geh],[data-konto],[data-alle]");
   if (!z) return;
   ev.preventDefault();
   const d = z.dataset;
@@ -609,6 +657,14 @@ document.addEventListener("click", (ev) => {
   if (d.alle) zustand.kontoFilter = null;
   if (d.geh) { const [s, u] = d.geh.split("/"); seite = s; if (u) unter[s] = u; location.hash = s; }
   if (d.rezept) { seite = "rezept"; location.hash = "rezept/" + d.rezept; }
+  if (d.kal) {
+    const [j, m] = (zustand.kalMonat || new Date().toISOString().slice(0, 7)).split("-").map(Number);
+    const n = new Date(j, m - 1 + Number(d.kal), 1);
+    zustand.kalMonat = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
+    zustand.kalTag = null;
+    return zeigen();
+  }
+  if (d.kaltag) { zustand.kalTag = zustand.kalTag === d.kaltag ? null : d.kaltag; return zeigen(); }
   if (d.leute !== undefined) { seite = "leute"; location.hash = "leute" + (d.leute ? "/" + encodeURIComponent(d.leute) : ""); }
   window.scrollTo(0, 0);
   zeigen();
