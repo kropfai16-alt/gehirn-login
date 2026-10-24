@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Gehirn verbinden</title>
+<!-- Login-Seite für den Gehirn-Connector. Liegt auf GitHub Pages, weil Supabase unter *.supabase.co
+     keine Webseiten ausliefert. Enthält keine Daten: Das Formular schickt das Passwort direkt an den Server. -->
+<style>
+:root{color-scheme:dark}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0A0C10;color:#EEF1F6;
+font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{width:min(360px,calc(100% - 32px));display:flex;flex-direction:column;gap:20px}
+h1{margin:0;font-size:28px;font-weight:600;letter-spacing:-.02em}
+p{margin:0;color:#9AA3B2}
+form{display:flex;flex-direction:column;gap:10px}
+label{font-size:13px;color:#9AA3B2}
+input[type=password]{height:52px;border-radius:16px;border:1px solid rgba(255,255,255,.12);background:#12151C;color:#EEF1F6;
+padding:0 16px;font-size:16px;outline:none}
+input[type=password]:focus{border-color:#6EE7B7}
+button{height:52px;border-radius:26px;border:0;background:#6EE7B7;color:#06281C;font-size:16px;font-weight:600;cursor:pointer;margin-top:6px}
+.fehler{color:#F9A8A8}
+</style>
+</head>
+<body>
+<main>
+  <h1>Gehirn verbinden</h1>
+  <p>Der Chat bekommt Zugriff auf deine Daten. Nur du kennst das Passwort.</p>
+  <form id="login" method="post" hidden>
+    <label for="passwort">Passwort</label>
+    <input id="passwort" name="passwort" type="password" autocomplete="current-password" required>
+    <p id="fehler" class="fehler" hidden></p>
+    <button type="submit">Verbinden</button>
+  </form>
+  <p id="ohne" class="fehler" hidden>Diese Seite bitte über „Verbinden“ in der Claude-App öffnen.</p>
+</main>
+<script>
+// Ziel fest eingetragen, damit die Seite das Passwort nie an eine fremde Adresse schickt.
+const SERVER = "https://cwuqbuyhdyrmmcykrymc.supabase.co/functions/v1/mcp/authorize";
+const FELDER = ["response_type", "client_id", "redirect_uri", "code_challenge", "code_challenge_method", "state", "resource", "scope"];
+const p = new URLSearchParams(location.search);
+const form = document.getElementById("login");
+if (p.get("fehler")) {
+  const f = document.getElementById("fehler");
+  f.textContent = p.get("fehler");
+  f.hidden = false;
+}
+if (p.get("client_id")) {
+  form.action = SERVER;
+  for (const k of FELDER) {
+    if (!p.has(k)) continue;
+    const i = document.createElement("input");
+    i.type = "hidden";
+    i.name = k;
+    i.value = p.get(k);
+    form.prepend(i);
+  }
+  form.hidden = false;
+  document.getElementById("passwort").focus();
+} else if (!p.get("fehler")) {
+  document.getElementById("ohne").hidden = false;
+} else {
+  form.remove();
+  document.querySelector("main").append(document.getElementById("fehler"));
+}
+</script>
+</body>
+</html>
