@@ -193,8 +193,8 @@ async function seiteStart() {
   const [von, bis] = (a.zeitraum || "").split(" bis ");
   let h = karte(`Budgetmonat ${datum(von).slice(0, 6)} – ${datum(bis).slice(0, 6)}`,
     `<div class="gross minus">${eur(-(a.summe_cent || 0))}</div><p class="hinweis">ausgegeben · Einnahmen ${eur(a.einnahmen_cent || 0)}</p>` +
-    Object.entries(a.kategorien || {}).slice(0, 6).map(([k, v]) => {
-      const pz = a.summe_cent ? Math.round(100 * v / a.summe_cent) : 0;
+    Object.entries(a.kategorien || {}).sort((x, y) => y[1] - x[1]).map(([k, v]) => {
+      const pz = a.summe_cent ? Math.max(0, Math.round(100 * v / a.summe_cent)) : 0;
       return `<div class="zeile"><div class="l">${esc(k)}<div class="balken"><i style="width:${pz}%"></i></div></div><div class="r">${eur(v)}</div></div>`;
     }).join(""));
   if ((u.erwartete_buchungen || []).length) {
@@ -205,7 +205,8 @@ async function seiteStart() {
   if (p) {
     h += karte("Prognose Giro + Bargeld", `<div class="zeile"><div class="l">Heute</div><div class="r">${eur(p.stand_heute_cent)}</div></div>` +
       (p.wochen || []).map((w) => zeile("bis " + datum(w.bis), "", eur(w.stand_cent), farbe(w.stand_cent < 0 ? -1 : 0))).join("") +
-      `<p class="hinweis">Tiefster Stand ${eur(p.tiefster_stand?.stand_cent)} am ${datum(p.tiefster_stand?.am)} · variable Ausgaben ca. ${eur(p.variable_ausgaben_pro_tag_cent)}/Tag</p>`);
+      `<p class="hinweis">Tiefster Stand ${eur(p.tiefster_stand?.stand_cent)} am ${datum(p.tiefster_stand?.am)} · variable Ausgaben ca. ${eur(p.variable_ausgaben_pro_tag_cent)}/Tag</p>` +
+      (p.wiederkehrend_angelegt ? "" : `<p class="warn">Noch keine festen Zahlungen angelegt – Gehalt, Miete und Raten fehlen in der Prognose. Im Chat anlegen.</p>`));
   }
   if ((u.bald_ablaufend || []).length) {
     h += karte("Bald aufbrauchen", u.bald_ablaufend.map((v) =>
@@ -301,7 +302,7 @@ async function seiteRezept() {
 async function seiteFilme() {
   $("#titel").textContent = "Filme & Serien";
   const t = unter.filme;
-  let h = reiter([["tipp", "Was schauen?"], ["merkliste", "Merkliste"], ["weiter", "Weiterschauen"], ["gesehen", "Gesehen"], ["statistik", "Statistik"]], t, "filme");
+  let h = reiter([["tipp", "Was schauen?"], ["freunde", "Mit Freunden"], ["merkliste", "Merkliste"], ["weiter", "Weiterschauen"], ["gesehen", "Gesehen"], ["statistik", "Statistik"]], t, "filme");
   const film = (x) => zeile(esc(x.titel) + (x.jahr ? ` <span class="leise">${x.jahr}</span>` : ""),
     [x.typ === "serie" ? "Serie" + (x.folgen ? " · " + x.folgen : "") : (x.laufzeit_min ? x.laufzeit_min + " Min." : "Film"),
      (x.genres || []).join(", "), x.naechste_folge ? `weiter: S${x.naechste_folge.staffel} F${x.naechste_folge.folge}` : "", x.warum || ""].filter(Boolean).map(esc).join(" · ") +
@@ -310,6 +311,15 @@ async function seiteFilme() {
   if (t === "tipp") {
     const v = await werkzeug("was_schauen", { anzahl: 5 });
     h += v.length ? karte("Vorschläge für heute", v.map(film).join("")) : leer("Merkliste ist leer – im Chat: „Merk dir Dune Teil 2“");
+  } else if (t === "freunde") {
+    const leute = await werkzeug("personen_anzeigen");
+    if (!leute.length) return h + leer("Noch keine Freunde vermerkt – im Chat: „Dunja gefällt Titanic“");
+    const wer = zustand.person && leute.some((x) => x.person === zustand.person) ? zustand.person : leute[0].person;
+    h += reiter(leute.map((x) => [x.person, x.person]), wer, "person");
+    const [v, info] = await Promise.all([werkzeug("mit_person_schauen", { person: wer, anzahl: 6 }), werkzeug("personen_anzeigen", { person: wer })]);
+    h += v.length ? karte("Mit " + wer + " schauen", v.map(film).join("")) : leer("Keine Vorschläge");
+    if (info.lieblingsgenres) h += karte(wer + " mag", info.lieblingsgenres.map((g) => `<span class="chip ok">${esc(g)}</span>`).join("") +
+      (info.gefaellt ? `<p class="hinweis">${esc(info.gefaellt.slice(0, 12).join(", "))}${info.gefaellt.length > 12 ? " …" : ""}</p>` : ""));
   } else if (t === "statistik") {
     const s = await werkzeug("filme_statistik");
     h += karte("Gesehen", zeile("Filme", "", s.filme_gesehen) + zeile("Serien", "", s.serien_gesehen) + zeile("Folgen", "", s.folgen_gesehen) +
@@ -337,7 +347,7 @@ function zeigeLogin(fehler = "") {
 
 // ---------- Ereignisse ----------
 document.addEventListener("click", (ev) => {
-  const z = ev.target.closest("[data-seite],[data-geld],[data-kueche],[data-filme],[data-rezept],[data-geh],[data-konto],[data-alle]");
+  const z = ev.target.closest("[data-seite],[data-geld],[data-kueche],[data-filme],[data-person],[data-rezept],[data-geh],[data-konto],[data-alle]");
   if (!z) return;
   ev.preventDefault();
   const d = z.dataset;
@@ -345,6 +355,7 @@ document.addEventListener("click", (ev) => {
   if (d.geld) { unter.geld = d.geld; if (d.geld !== "buchungen") zustand.kontoFilter = null; }
   if (d.kueche) unter.kueche = d.kueche;
   if (d.filme) { unter.filme = d.filme; suche = ""; }
+  if (d.person) zustand.person = d.person;
   if (d.konto) { zustand.kontoFilter = d.konto; unter.geld = "buchungen"; }
   if (d.alle) zustand.kontoFilter = null;
   if (d.geh) { const [s, u] = d.geh.split("/"); seite = s; if (u) unter[s] = u; location.hash = s; }
