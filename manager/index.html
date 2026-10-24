@@ -217,8 +217,9 @@ async function zeigen() {
 
 async function seiteStart() {
   $("#titel").textContent = "Heute";
-  const [u, p, f, fr, auf] = await Promise.all([werkzeug("ueberblick"), werkzeug("cashflow_prognose", { tage: 30 }).catch(() => null),
-    werkzeug("was_kannst_du").catch(() => null), werkzeug("fragen_anzeigen").catch(() => null), werkzeug("aufgaben_anzeigen").catch(() => null)]);
+  const [u, p, f, fr, auf, gw] = await Promise.all([werkzeug("ueberblick"), werkzeug("cashflow_prognose", { tage: 30 }).catch(() => null),
+    werkzeug("was_kannst_du").catch(() => null), werkzeug("fragen_anzeigen").catch(() => null), werkzeug("aufgaben_anzeigen").catch(() => null),
+    werkzeug("gewohnheiten_anzeigen").catch(() => null)]);
   const a = u.ausgaben_budgetmonat || {};
   const [von, bis] = (a.zeitraum || "").split(" bis ");
   let h = "";
@@ -234,6 +235,10 @@ async function seiteStart() {
     (auf.offen.length > 6 ? `<p class="hinweis">… und ${auf.offen.length - 6} weitere</p>` : "") +
     `<form class="formular" data-form="aufgabe" style="margin-top:8px"><input name="titel" placeholder="Neue Aufgabe" autocomplete="off" style="flex:1 1 55%">` +
     `<input name="faellig" type="date" style="flex:1 1 30%"><button class="mini">+</button></form>`);
+  if (gw && gw.length) h += karte("Gewohnheiten", gw.map((x) => zeile(
+      (x.heute ? `<span class="leise"><s>${esc(x.name)}</s></span>` : esc(x.name)),
+      `<span style="letter-spacing:1px">${esc(x.letzte_14.slice(-7))}</span> · ${x.pro_woche === 7 ? "Serie " + esc(x.serie) : x.diese_woche + "/" + x.pro_woche + " diese Woche"}`,
+      tun(x.heute ? "↺" : "✓", "gewohnheit", { id: x.id, geschafft: !x.heute }, "", x.heute ? "leise" : ""))).join(""));
   h += karte("Wie geht's dir heute?", `<div style="display:flex;justify-content:space-between">` +
     ["😫", "😕", "😐", "🙂", "😄"].map((e, i) => tun(`<span style="font-size:24px">${e}</span>`, "gesundheit_erfassen", { stimmung: i + 1 })).join("") +
     `</div>` + zeile("Mehr: Schlaf, Trends, Fristen &amp; Dokumente, was ich über dich weiß", "", "›", "leise", 'data-seite="ich"'));
