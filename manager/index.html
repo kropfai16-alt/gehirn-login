@@ -549,8 +549,12 @@ async function seiteLeute() {
   $("#titel").textContent = wer || "Freunde & Familie";
   const zurueck = `<p><a href="${wer ? "#leute" : "#start"}" style="color:var(--akzent)">‹ Zurück</a></p>`;
   if (!wer) {
-    const l = await werkzeug("leute_anzeigen");
-    return zurueck + karte(`${l.length} Personen`, l.map((p) => zeile(esc(p.person),
+    const [l, lo] = await Promise.all([werkzeug("leute_anzeigen"), werkzeug("lokale_anzeigen").catch(() => null)]);
+    const lokZeile = (x) => zeile(esc(x.name), [x.kueche || x.art, x.ort, x.preis, x.zuletzt ? "zuletzt " + datum(x.zuletzt) : "", (x.mit || []).join(", ")]
+      .filter(Boolean).map(esc).join(" · "), x.bewertung ? x.bewertung + "/10" : "💡", "leise");
+    const aus = lo && lo.alle ? karte("Ausgehen", ((lo.lieblinge || []).length ? `<p class="hinweis" style="margin:4px 0">Lieblinge</p>` + lo.lieblinge.map(lokZeile).join("") : "") +
+      ((lo.wunschliste || []).length ? `<p class="hinweis" style="margin:8px 0 4px">Will ich mal hin</p>` + lo.wunschliste.map(lokZeile).join("") : "")) : "";
+    return zurueck + aus + karte(`${l.length} Personen`, l.map((p) => zeile(esc(p.person),
       [p.geburtstag ? "🎂 " + p.geburtstag : "", p.zuletzt_kontakt ? "zuletzt " + datum(p.zuletzt_kontakt) : "",
        p.offene_geschenkideen ? p.offene_geschenkideen + " Geschenkidee(n)" : ""].filter(Boolean).map(esc).join(" · "),
       p.tage_bis_geburtstag !== undefined ? `in ${p.tage_bis_geburtstag} T.` : "›", "leise", `data-leute="${esc(p.person)}"`)).join("")) +
