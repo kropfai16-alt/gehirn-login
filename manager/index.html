@@ -178,7 +178,7 @@ async function zeigen() {
   const ziel = $("#inhalt");
   ziel.classList.add("laden");
   try {
-    ziel.innerHTML = await ({ start: seiteStart, geld: seiteGeld, kueche: seiteKueche, filme: seiteFilme, rezept: seiteRezept, faehig: seiteFaehig, sport: seiteSport }[seite] || seiteStart)();
+    ziel.innerHTML = await ({ start: seiteStart, geld: seiteGeld, kueche: seiteKueche, filme: seiteFilme, rezept: seiteRezept, faehig: seiteFaehig, sport: seiteSport, leute: seiteLeute }[seite] || seiteStart)();
   } catch (e) {
     if (e.message === "ANMELDEN") return zeigeLogin();
     ziel.innerHTML = karte("", `<p class="fehler">${esc(e.message)}</p><button class="knopf" onclick="zeigen()">Nochmal</button>`);
@@ -221,6 +221,14 @@ async function seiteStart() {
   if ((u.essen_heute || []).length) {
     h += karte("Heute essen", u.essen_heute.map((e) => zeile(esc(e.titel), e.fehlt ? "fehlt: " + esc(e.fehlt.join(", ")) : "",
       e.status === "gekocht" ? "✓" : "›", e.status === "gekocht" ? "plus" : "leise", 'data-geh="kueche/woche"')).join(""));
+  }
+  if ((u.geburtstage_bald || []).length) {
+    h += karte("Geburtstage", u.geburtstage_bald.map((p) => zeile(esc(p.person) + (p.wird ? ` <span class="leise">wird ${p.wird}</span>` : ""),
+      tagkurz(p.naechster_geburtstag), p.tage_bis_geburtstag === 0 ? "heute 🎉" : `in ${p.tage_bis_geburtstag} T.`,
+      p.tage_bis_geburtstag <= 3 ? "warn" : "leise", `data-leute="${esc(p.person)}"`)).join("") +
+      zeile("Alle Freunde & Familie", "", "›", "leise", 'data-leute=""'));
+  } else {
+    h += karte("", zeile("Freunde & Familie", "", "›", "leise", 'data-leute=""'));
   }
   if (u.sport_woche) {
     const sw = u.sport_woche;
@@ -315,6 +323,31 @@ async function seiteKueche() {
 }
 
 const SPORT = { laufen: "🏃 Laufen", rad: "🚴 Rad", kraft: "💪 Kraft daheim", tennis: "🎾 Tennis", sonstiges: "Sport" };
+
+async function seiteLeute() {
+  const wer = decodeURIComponent(location.hash.split("/")[1] || "");
+  $("#titel").textContent = wer || "Freunde & Familie";
+  const zurueck = `<p><a href="${wer ? "#leute" : "#start"}" style="color:var(--akzent)">‹ Zurück</a></p>`;
+  if (!wer) {
+    const l = await werkzeug("leute_anzeigen");
+    return zurueck + karte(`${l.length} Personen`, l.map((p) => zeile(esc(p.person),
+      [p.geburtstag ? "🎂 " + p.geburtstag : "", p.zuletzt_kontakt ? "zuletzt " + datum(p.zuletzt_kontakt) : "",
+       p.offene_geschenkideen ? p.offene_geschenkideen + " Geschenkidee(n)" : ""].filter(Boolean).map(esc).join(" · "),
+      p.tage_bis_geburtstag !== undefined ? `in ${p.tage_bis_geburtstag} T.` : "›", "leise", `data-leute="${esc(p.person)}"`)).join("")) +
+      `<p class="hinweis">Neues im Chat erzählen, z. B. „Alex hat am 17.05. Geburtstag und klettert gern“.</p>`;
+  }
+  const p = await werkzeug("leute_anzeigen", { person: wer });
+  const NAMEN = { hobby: "Hobbies", vorliebe: "Mag", abneigung: "Mag nicht", wunsch: "Wünsche", info: "Infos", groesse: "Größen", familie: "Familie", arbeit: "Arbeit" };
+  let h = zurueck + karte("", `<div style="font-size:21px;font-weight:650">${esc(p.person)}</div><p class="hinweis">${[p.beziehung, p.geburtstag ? "🎂 " + p.geburtstag +
+    (p.wird ? ` (wird ${p.wird})` : "") : "", p.tage_bis_geburtstag !== undefined ? `in ${p.tage_bis_geburtstag} Tagen` : ""].filter(Boolean).map(esc).join(" · ")}</p>` +
+    (p.notiz ? `<p class="hinweis">${esc(p.notiz)}</p>` : ""));
+  for (const [art, liste] of Object.entries(p.fakten || {})) h += karte(NAMEN[art] || art, liste.map((f) => zeile(esc(f.text), "", "")).join(""));
+  if (p.geschenke) h += karte("Geschenke", p.geschenke.map((x) => zeile(esc(x.text), [x.anlass + " " + x.jahr, x.reaktion || ""].filter(Boolean).map(esc).join(" · "),
+    { idee: "💡", gekauft: "🛍️", verschenkt: "🎁" }[x.status] || "")).join(""));
+  if (p.kontakte) h += karte("Zuletzt", p.kontakte.map((k) => zeile(esc(k.text || "Kontakt"), datum(k.am), "")).join(""));
+  if (p.filme_gefallen) h += karte("Filme, die gefallen", `<p class="hinweis">${esc(p.filme_gefallen.join(", "))}</p>`);
+  return h;
+}
 
 async function seiteSport() {
   $("#titel").textContent = "Sport";
@@ -414,7 +447,7 @@ function zeigeLogin(fehler = "") {
 
 // ---------- Ereignisse ----------
 document.addEventListener("click", (ev) => {
-  const z = ev.target.closest("[data-seite],[data-geld],[data-kueche],[data-filme],[data-person],[data-rezept],[data-geh],[data-konto],[data-alle]");
+  const z = ev.target.closest("[data-leute],[data-seite],[data-geld],[data-kueche],[data-filme],[data-person],[data-rezept],[data-geh],[data-konto],[data-alle]");
   if (!z) return;
   ev.preventDefault();
   const d = z.dataset;
@@ -427,6 +460,7 @@ document.addEventListener("click", (ev) => {
   if (d.alle) zustand.kontoFilter = null;
   if (d.geh) { const [s, u] = d.geh.split("/"); seite = s; if (u) unter[s] = u; location.hash = s; }
   if (d.rezept) { seite = "rezept"; location.hash = "rezept/" + d.rezept; }
+  if (d.leute !== undefined) { seite = "leute"; location.hash = "leute" + (d.leute ? "/" + encodeURIComponent(d.leute) : ""); }
   window.scrollTo(0, 0);
   zeigen();
 });
@@ -438,7 +472,7 @@ document.addEventListener("input", (ev) => {
 });
 window.addEventListener("hashchange", () => {
   const s = location.hash.slice(1).split("/")[0] || "start";
-  if (s !== seite) { seite = s; zeigen(); }
+  if (s !== seite || s === "leute") { seite = s; zeigen(); }
 });
 $("#neu").onclick = () => zeigen();
 $("#ab").onclick = () => { zustand = { client_id: zustand.client_id }; sichern(zustand); zeigeLogin(); };
