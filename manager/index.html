@@ -245,7 +245,7 @@ async function seiteStart() {
 async function seiteGeld() {
   $("#titel").textContent = "Geld";
   const t = unter.geld;
-  let h = reiter([["konten", "Konten"], ["buchungen", "Buchungen"], ["wiederkehrend", "Wiederkehrend"], ["kredite", "Kredite"]], t, "geld");
+  let h = reiter([["konten", "Konten"], ["buchungen", "Buchungen"], ["wiederkehrend", "Wiederkehrend"], ["abos", "Abos"], ["kredite", "Kredite"]], t, "geld");
   if (t === "konten") {
     const k = await werkzeug("konten_anzeigen");
     const gruppen = { giro: "Giro", bargeld: "Bargeld", sparen: "Sparen", depot: "Depot", kredit: "Kredite" };
@@ -270,6 +270,17 @@ async function seiteGeld() {
     h += w.wiederkehrend.length ? karte("Alle", w.wiederkehrend.map((d) =>
       zeile(esc(d.name), `${rh[d.rhythmus]}${d.tag ? ", am " + d.tag + "." : ""} · ${esc(d.konto)}${d.nach ? " → " + esc(d.nach) : ""}`, eur(d.art === "ausgabe" ? -d.betrag_cent : d.betrag_cent, d.art !== "umbuchung"),
         farbe(d.art === "umbuchung" ? 0 : d.art === "ausgabe" ? -1 : 1))).join("")) : leer("Noch keine wiederkehrenden Buchungen – im Chat anlegen, z. B. „Miete 800 € am 1.“");
+  } else if (t === "abos") {
+    const c = await werkzeug("abo_check");
+    h += karte("Abos & Verträge", `<div class="gross minus">${eur(-c.summe_jahr_cent)}</div><p class="hinweis">pro Jahr · ${eur(c.summe_monat_cent)} pro Monat</p>`);
+    h += c.abos.length ? karte(`${c.abos.length} Verträge`, c.abos.map((a) => zeile(esc(a.name) +
+        (c.kaum_genutzt.includes(a.name) ? ' <span class="chip w">kaum genutzt</span>' : "") +
+        (a.tage_bis_frist !== undefined && a.tage_bis_frist <= 45 ? ` <span class="chip w">kündigen bis ${datum(a.kuendigen_bis)}</span>` : ""),
+      [a.vertragsart, eur(a.pro_monat_cent) + "/Monat", a.laufzeit_ende ? "läuft bis " + datum(a.laufzeit_ende) : "",
+       a.nutzung_90_tage ? `${a.nutzung_90_tage.titel} Titel, ${a.nutzung_90_tage.folgen} Folgen in 90 T.` : "", a.fehlt ? "fehlt: " + a.fehlt : ""]
+        .filter(Boolean).map(esc).join(" · "), eur(-a.pro_jahr_cent), "minus")).join(""))
+      : leer("Noch keine Abos angelegt – im Chat: „Netflix 13,99 € jeden Monat am 3.“");
+    if (c.noch_nicht_angelegt.length) h += karte("Sieht regelmäßig aus", c.noch_nicht_angelegt.map((x) => zeile(esc(x.name), "im Chat anlegen", eur(-x.betrag_cent), "minus")).join(""));
   } else {
     const k = await werkzeug("kredite_anzeigen");
     h += karte("Restschuld gesamt", `<div class="gross minus">${eur(-k.restschuld_gesamt_cent)}</div>`);
