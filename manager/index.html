@@ -545,19 +545,28 @@ async function seiteFilme() {
      (x.genres || []).join(", "), x.naechste_folge ? `weiter: S${x.naechste_folge.staffel} F${x.naechste_folge.folge}` : "", x.warum || ""].filter(Boolean).map(esc).join(" · ") +
     (x.streaming ? "<br>" + x.streaming.map((s) => `<span class="chip ${x.bei_meinen_diensten ? "ok" : ""}">${esc(s)}</span>`).join("") : ""),
     (x.bewertung ? "★ " + x.bewertung : (x.tmdb_wertung ? `<span class="leise">${String(x.tmdb_wertung).replace(".", ",")}</span>` : "")) + extra);
+  // Film oder Serie? gilt für „Was schauen?“ und „Mit Freunden“
+  const typ = zustand.filmTyp || "";
+  const typWahl = reiter([["", "Alles"], ["film", "Filme"], ["serie", "Serien"]], typ, "filmtyp");
+  const mitTyp = typ ? { typ } : {};
+  const knoepfe = (x) => {
+    const wer = x.tmdb_id ? { tmdb_id: x.tmdb_id, typ: x.typ } : { titel: x.titel_id };
+    return `<br>${tun("gesehen …", "film_speichern", { ...wer, status: "gesehen" }).replace("<button", "<button data-bewerten")}` +
+      tun("kein Interesse", "film_speichern", { ...wer, status: "kein_interesse" }, "", "leise");
+  };
   if (t === "tipp") {
-    const r = await werkzeug("was_schauen", { anzahl: 5 });
+    h += typWahl;
+    const r = await werkzeug("was_schauen", { anzahl: 5, ...mitTyp });
     const v = Array.isArray(r) ? r : r.vorschlaege || [];
-    const knoepfe = (x) => `<br>${tun("gesehen …", "film_speichern", { tmdb_id: x.tmdb_id, typ: x.typ, status: "gesehen" }).replace("<button", "<button data-bewerten")}` +
-      tun("kein Interesse", "film_speichern", { tmdb_id: x.tmdb_id, typ: x.typ, status: "kein_interesse" }, "", "leise");
-    h += v.length ? karte("Neu für dich", v.map((x) => film(x, knoepfe(x))).join("")) : leer(r.hinweis || "Gerade nichts Passendes – im Chat: „Was kann ich heute schauen?“");
+    h += v.length ? karte(typ === "film" ? "Neue Filme für dich" : typ === "serie" ? "Neue Serien für dich" : "Neu für dich",
+      v.map((x) => film(x, knoepfe(x))).join("")) : leer(r.hinweis || "Gerade nichts Passendes – im Chat: „Was kann ich heute schauen?“");
   } else if (t === "freunde") {
     const leute = await werkzeug("personen_anzeigen");
     if (!leute.length) return h + leer("Noch keine Freunde vermerkt – im Chat: „Dunja gefällt Titanic“");
     const wer = zustand.person && leute.some((x) => x.person === zustand.person) ? zustand.person : leute[0].person;
-    h += reiter(leute.map((x) => [x.person, x.person]), wer, "person");
-    const [v, info] = await Promise.all([werkzeug("mit_person_schauen", { person: wer, anzahl: 6 }), werkzeug("personen_anzeigen", { person: wer })]);
-    h += v.length ? karte("Mit " + wer + " schauen", v.map(film).join("")) : leer("Keine Vorschläge");
+    h += reiter(leute.map((x) => [x.person, x.person]), wer, "person") + typWahl;
+    const [v, info] = await Promise.all([werkzeug("mit_person_schauen", { person: wer, anzahl: 6, ...mitTyp }), werkzeug("personen_anzeigen", { person: wer })]);
+    h += v.length ? karte("Mit " + wer + " schauen", v.map((x) => film(x, knoepfe(x))).join("")) : leer("Keine Vorschläge");
     if (info.lieblingsgenres) h += karte(wer + " mag", info.lieblingsgenres.map((g) => `<span class="chip ok">${esc(g)}</span>`).join("") +
       (info.gefaellt ? `<p class="hinweis">${esc(info.gefaellt.slice(0, 12).join(", "))}${info.gefaellt.length > 12 ? " …" : ""}</p>` : ""));
   } else if (t === "statistik") {
@@ -644,7 +653,7 @@ document.addEventListener("submit", async (ev) => {
 });
 
 document.addEventListener("click", (ev) => {
-  const z = ev.target.closest("[data-kal],[data-kaltag],[data-leute],[data-seite],[data-geld],[data-kueche],[data-filme],[data-person],[data-rezept],[data-geh],[data-konto],[data-alle]");
+  const z = ev.target.closest("[data-filmtyp],[data-kal],[data-kaltag],[data-leute],[data-seite],[data-geld],[data-kueche],[data-filme],[data-person],[data-rezept],[data-geh],[data-konto],[data-alle]");
   if (!z) return;
   ev.preventDefault();
   const d = z.dataset;
@@ -653,6 +662,7 @@ document.addEventListener("click", (ev) => {
   if (d.kueche) unter.kueche = d.kueche;
   if (d.filme) { unter.filme = d.filme; suche = ""; }
   if (d.person) zustand.person = d.person;
+  if (d.filmtyp !== undefined) zustand.filmTyp = d.filmtyp;
   if (d.konto) { zustand.kontoFilter = d.konto; unter.geld = "buchungen"; }
   if (d.alle) zustand.kontoFilter = null;
   if (d.geh) { const [s, u] = d.geh.split("/"); seite = s; if (u) unter[s] = u; location.hash = s; }
