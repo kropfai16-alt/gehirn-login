@@ -411,6 +411,9 @@ async function seiteKueche() {
       zeile(esc(e.text) + (e.warnungen ? ' <span class="chip w">⚠ ' + esc(e.warnungen.map((w) => w.gegenstand).join(", ")) + "</span>" : ""),
         [e.notiz, e.im_vorrat ? "da: " + e.im_vorrat : ""].filter(Boolean).map(esc).join(" · "),
         menge(e.menge, e.einheit) + tun("✓", "einkauf_abhaken", { ids: [e.id] }))).join("")) : leer("Einkaufsliste ist leer");
+    if ((l.vielleicht_auch || []).length) h += karte("Vielleicht auch", l.vielleicht_auch.map((x) =>
+      zeile(esc(x.produkt), `kaufst du etwa alle ${x.alle_tage} Tage · zuletzt vor ${x.zuletzt_vor_tagen}`,
+        tun("+", "einkauf_hinzufuegen", { eintraege: [{ produkt: x.produkt }] }))).join(""));
     if ((l.zuletzt_erledigt || []).length) h += karte("Zuletzt gekauft", l.zuletzt_erledigt.slice(0, 8).map((e) => zeile(`<span class="leise">${esc(e.text)}</span>`, datum(e.am) + (e.per_bon ? " · per Bon" : ""), "✓", "plus")).join(""));
   } else if (t === "vorrat") {
     const v = await werkzeug("vorrat_anzeigen", { filter: "alle" });
