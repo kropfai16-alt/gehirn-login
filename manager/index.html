@@ -376,6 +376,10 @@ async function seiteGeld() {
       : leer("Noch keine Abos angelegt – im Chat: „Netflix 13,99 € jeden Monat am 3.“");
     if ((c.vertrag_kandidaten || []).length) h += karte("Sieht nach Vertrag aus", c.vertrag_kandidaten.map((x) =>
       zeile(esc(x.name), `${esc(x.kategorie)} · im Chat: „${esc(x.name)} ist ein Vertrag, jeden Monat“`, eur(-x.betrag_cent), "minus")).join(""));
+    const rl = await werkzeug("ruecklagen").catch(() => null);
+    if (rl && rl.posten.length) h += karte("Rücklagen für Jahreszahlungen", `<div class="gross">${esc(rl.pro_monat)}</div><p class="hinweis">pro Monat zurücklegen</p>` +
+      rl.posten.map((x) => zeile(esc(x.name), [x.rhythmus, x.naechste ? "nächste " + datum(x.naechste) : ""].filter(Boolean).map(esc).join(" · "),
+        esc(x.betrag), x.tage_bis !== undefined && x.tage_bis <= 30 ? "warn" : "leise")).join(""));
     if ((c.feste_kosten || []).length) h += karte("Feste Kosten (keine Abos)", c.feste_kosten.map((x) => zeile(esc(x.name), "", eur(-x.pro_monat_cent) + "/Monat", "minus")).join("") +
       `<p class="hinweis">Nur zur Info – zusammen ${eur(c.feste_kosten_monat_cent)} pro Monat.</p>`);
     if (c.noch_nicht_angelegt.length) h += karte("Sieht regelmäßig aus", c.noch_nicht_angelegt.map((x) => zeile(esc(x.name), "im Chat anlegen", eur(-x.betrag_cent), "minus")).join(""));
