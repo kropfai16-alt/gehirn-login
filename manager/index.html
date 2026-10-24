@@ -432,7 +432,8 @@ async function seiteKueche() {
     h += r.length ? karte(t === "kochen" ? "Passt zum Vorrat" : `${r.length} Rezepte`, r.map((x) =>
       zeile(esc(x.titel) + (x.warnungen ? ' <span class="chip w">⚠</span>' : ""),
         [x.zeit_min ? x.zeit_min + " Min." : "", x.portionen ? x.portionen + " Port." : "", x.zutaten_vorhanden ? x.zutaten_vorhanden + " da" : "",
-         x.fehlt && x.fehlt.length ? "fehlt: " + x.fehlt.join(", ") : ""].filter(Boolean).map(esc).join(" · "), "›", "leise", `data-rezept="${x.rezept_id}"`)).join(""))
+         x.fehlt && x.fehlt.length ? "fehlt: " + x.fehlt.join(", ") : "", (x.tags || []).join(", ")].filter(Boolean).map(esc).join(" · "),
+        x.bewertung ? `${x.bewertung}/10 ›` : "›", "leise", `data-rezept="${x.rezept_id}"`)).join(""))
       : leer("Noch keine Rezepte – im Chat einen Link schicken: „Speicher das Rezept: …“");
   }
   return h;
