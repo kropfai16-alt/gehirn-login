@@ -582,6 +582,12 @@ async function seiteSport() {
   let h = karte("Diese Woche", `<div class="gross ${w.erledigt >= w.ziel ? "plus" : ""}">${w.erledigt} / ${w.ziel}</div>` +
     `<div class="balken"><i style="width:${pz}%"></i></div><p class="hinweis">${w.minuten} Minuten` +
     (u.serie_wochen ? ` · ${u.serie_wochen} Woche${u.serie_wochen > 1 ? "n" : ""} in Folge geschafft 🔥` : "") + "</p>");
+  if (u.laufziel) {
+    const z = u.laufziel, gesamt = z.erledigt + z.verpasst + z.offen;
+    h += karte(`🏁 Laufziel ${esc(z.ziel)}`, `<div class="balken"><i style="width:${gesamt ? Math.round(100 * z.erledigt / gesamt) : 0}%"></i></div>` +
+      `<p class="hinweis">${z.erledigt} von ${gesamt} Läufen erledigt${z.verpasst ? " · " + z.verpasst + " verpasst" : ""} · noch ${z.tage_bis} Tage` +
+      (z.laengster_lauf_seit_start ? ` · längster Lauf ${String(z.laengster_lauf_seit_start).replace(".", ",")} km` : "") + "</p>");
+  }
   h += u.plan.length ? karte("Plan", u.plan.map((p) => zeile(esc(SPORT[p.art] || p.art), [tagkurz(p.tag), p.dauer_min ? p.dauer_min + " Min." : "",
       p.beschreibung || ""].filter(Boolean).map(esc).join(" · "), p.status === "erledigt" ? "✓" : p.status === "ausgefallen" ? "–" :
       tun("✓", "sport_erfassen", { art: p.art, ...(p.dauer_min ? { dauer_min: p.dauer_min } : {}), am: p.tag }, "Training als gemacht festhalten?") +
