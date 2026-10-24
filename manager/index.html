@@ -64,6 +64,7 @@ padding:0 14px;font-size:15px;margin:0 0 12px;outline:none}
   <button data-seite="start"><span>🏠</span>Heute</button>
   <button data-seite="geld"><span>💶</span>Geld</button>
   <button data-seite="kueche"><span>🥕</span>Küche</button>
+  <button data-seite="sport"><span>🏃</span>Sport</button>
   <button data-seite="filme"><span>🎬</span>Filme</button>
 </nav>
 <script>
@@ -177,7 +178,7 @@ async function zeigen() {
   const ziel = $("#inhalt");
   ziel.classList.add("laden");
   try {
-    ziel.innerHTML = await ({ start: seiteStart, geld: seiteGeld, kueche: seiteKueche, filme: seiteFilme, rezept: seiteRezept, faehig: seiteFaehig }[seite] || seiteStart)();
+    ziel.innerHTML = await ({ start: seiteStart, geld: seiteGeld, kueche: seiteKueche, filme: seiteFilme, rezept: seiteRezept, faehig: seiteFaehig, sport: seiteSport }[seite] || seiteStart)();
   } catch (e) {
     if (e.message === "ANMELDEN") return zeigeLogin();
     ziel.innerHTML = karte("", `<p class="fehler">${esc(e.message)}</p><button class="knopf" onclick="zeigen()">Nochmal</button>`);
@@ -220,6 +221,11 @@ async function seiteStart() {
   if ((u.essen_heute || []).length) {
     h += karte("Heute essen", u.essen_heute.map((e) => zeile(esc(e.titel), e.fehlt ? "fehlt: " + esc(e.fehlt.join(", ")) : "",
       e.status === "gekocht" ? "✓" : "›", e.status === "gekocht" ? "plus" : "leise", 'data-geh="kueche/woche"')).join(""));
+  }
+  if (u.sport_woche) {
+    const sw = u.sport_woche;
+    h += karte("Sport", zeile(`${sw.erledigt} von ${sw.ziel} Einheiten diese Woche`, (u.sport_heute || []).map((p) =>
+      `heute: ${SPORT[p.art] || p.art}${p.status !== "geplant" ? " (" + p.status + ")" : ""}`).join(", "), "›", "leise", 'data-seite="sport"'));
   }
   h += karte("", zeile("Einkaufsliste", "", `${u.einkaufsliste_offen || 0} offen ›`, "", 'data-geh="kueche/einkauf"') +
     (u.letzter_bon ? zeile("Letzter Bon", esc(u.letzter_bon.markt) + " · " + datum(u.letzter_bon.am), eur(u.letzter_bon.summe_cent)) : ""));
@@ -305,6 +311,31 @@ async function seiteKueche() {
          x.fehlt && x.fehlt.length ? "fehlt: " + x.fehlt.join(", ") : ""].filter(Boolean).map(esc).join(" · "), "›", "leise", `data-rezept="${x.rezept_id}"`)).join(""))
       : leer("Noch keine Rezepte – im Chat einen Link schicken: „Speicher das Rezept: …“");
   }
+  return h;
+}
+
+const SPORT = { laufen: "🏃 Laufen", rad: "🚴 Rad", kraft: "💪 Kraft daheim", tennis: "🎾 Tennis", sonstiges: "Sport" };
+
+async function seiteSport() {
+  $("#titel").textContent = "Sport";
+  const u = await werkzeug("sport_anzeigen");
+  const w = u.woche;
+  const pz = Math.min(100, Math.round(100 * w.erledigt / w.ziel));
+  let h = karte("Diese Woche", `<div class="gross ${w.erledigt >= w.ziel ? "plus" : ""}">${w.erledigt} / ${w.ziel}</div>` +
+    `<div class="balken"><i style="width:${pz}%"></i></div><p class="hinweis">${w.minuten} Minuten` +
+    (u.serie_wochen ? ` · ${u.serie_wochen} Woche${u.serie_wochen > 1 ? "n" : ""} in Folge geschafft 🔥` : "") + "</p>");
+  h += u.plan.length ? karte("Plan", u.plan.map((p) => zeile(esc(SPORT[p.art] || p.art), [tagkurz(p.tag), p.dauer_min ? p.dauer_min + " Min." : "",
+      p.beschreibung || ""].filter(Boolean).map(esc).join(" · "), p.status === "erledigt" ? "✓" : p.status === "ausgefallen" ? "–" : "",
+      p.status === "erledigt" ? "plus" : "leise")).join(""))
+    : leer("Noch nichts geplant – im Chat: „Plan mir Sport für die Woche“");
+  if (u.erledigt.length) h += karte("Gemacht", u.erledigt.map((e) => zeile(esc(SPORT[e.art] || e.art), [datum(e.am), e.dauer_min ? e.dauer_min + " Min." : "",
+      e.distanz_km ? String(e.distanz_km).replace(".", ",") + " km" : "", e.pace_min_km ? e.pace_min_km + " min/km" : "",
+      (e.uebungen || []).map((x) => `${x.saetze || ""}×${x.wdh || (x.sek ? x.sek + " s" : "")} ${x.name}`).join(", ")].filter(Boolean).map(esc).join(" · "), "✓", "plus")).join(""));
+  const b = u.bestwerte || {};
+  const best = [b.laengster_lauf_km ? zeile("Längster Lauf", "", String(b.laengster_lauf_km).replace(".", ",") + " km") : "",
+    b.laengste_radtour_km ? zeile("Längste Radtour", "", String(b.laengste_radtour_km).replace(".", ",") + " km") : "",
+    ...Object.entries(b.max_wdh || {}).map(([n, x]) => zeile(esc(n), "meiste Wiederholungen", x))].join("");
+  if (best) h += karte("Bestwerte", best);
   return h;
 }
 
