@@ -214,6 +214,9 @@ async function seiteStart() {
   let h = "";
   if (f && f.neu.length) h += karte("Neu im Manager", f.neu.slice(0, 4).map((n) => zeile(esc(n.text), [n.bereich, n.beispiel ? "„" + n.beispiel + "“" : ""].filter(Boolean).map(esc).join(" · "), "")).join("") +
     zeile("Alles, was der Manager kann", "", "›", "leise", 'data-seite="faehig"'));
+  if ((u.erinnerungen || []).length) h += karte("Erinnerungen", u.erinnerungen.map((e) => zeile("⏰ " + esc(e.text),
+    `${e.wochentag} ${e.faellig_am.slice(8, 10)}.${e.faellig_am.slice(5, 7)}. ${e.faellig_am.slice(11)}` + (e.wiederholung ? " · " + esc(e.wiederholung) : ""),
+    tun("✓", "erinnerung_aendern", { id: e.id, status: "erledigt" }))).join(""));
   if ((u.anstoesse || []).length) h += karte("Steht an", u.anstoesse.map((a) => zeile(esc(a), "im Chat erledigen", "")).join(""));
   h += karte(`Budgetmonat ${datum(von).slice(0, 6)} – ${datum(bis).slice(0, 6)}`,
     `<div class="gross minus">${eur(-(a.summe_cent || 0))}</div><p class="hinweis">ausgegeben · Einnahmen ${eur(a.einnahmen_cent || 0)}</p>` +
