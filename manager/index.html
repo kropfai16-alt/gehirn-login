@@ -236,7 +236,7 @@ async function seiteStart() {
     `<input name="faellig" type="date" style="flex:1 1 30%"><button class="mini">+</button></form>`);
   h += karte("Wie geht's dir heute?", `<div style="display:flex;justify-content:space-between">` +
     ["😫", "😕", "😐", "🙂", "😄"].map((e, i) => tun(`<span style="font-size:24px">${e}</span>`, "gesundheit_erfassen", { stimmung: i + 1 })).join("") +
-    `</div>` + zeile("Mehr: Schlaf, Energie, Trends, was ich über dich weiß", "", "›", "leise", 'data-seite="ich"'));
+    `</div>` + zeile("Mehr: Schlaf, Trends, Fristen &amp; Dokumente, was ich über dich weiß", "", "›", "leise", 'data-seite="ich"'));
   if (fr && fr.heute) h += karte("Frage an dich", `<p style="margin:0 0 8px">${esc(fr.heute.frage)}</p>` +
     (fr.heute.warum ? `<p class="hinweis" style="margin-top:-4px">${esc(fr.heute.warum)}</p>` : "") +
     `<form class="formular" data-form="frage"><input type="hidden" name="id" value="${esc(fr.heute.id)}"><input name="antwort" placeholder="Deine Antwort" autocomplete="off" style="flex:1 1 100%">` +
@@ -466,7 +466,7 @@ function kalender(monat, u, reisen) {
 
 async function seiteIch() {
   $("#titel").textContent = "Ich";
-  const [g, fr] = await Promise.all([werkzeug("gesundheit_anzeigen"), werkzeug("fragen_anzeigen")]);
+  const [g, fr, fx] = await Promise.all([werkzeug("gesundheit_anzeigen"), werkzeug("fragen_anzeigen"), werkzeug("fristen_anzeigen").catch(() => [])]);
   const sterne = (n, feld, icons) => `<div style="display:flex;justify-content:space-between">` +
     icons.map((e, i) => tun(`<span style="font-size:22px">${e}</span>`, "gesundheit_erfassen", { [feld]: i + 1 })).join("") + `</div>`;
   let h = `<p><a href="#start" style="color:var(--akzent)">‹ Zurück</a></p>`;
@@ -482,6 +482,11 @@ async function seiteIch() {
     zeile("Energie", "", `${z(s7.energie)} · ${z(s30?.energie)}`) +
     (g.gewicht ? zeile("Gewicht", g.gewicht.vor_30_tagen ? "vor 30 Tagen " + z(g.gewicht.vor_30_tagen) + " kg" : "", z(g.gewicht.aktuell) + " kg") : "") +
     (g.sport_und_schlaf ? `<p class="hinweis">${esc(g.sport_und_schlaf.replace(/(\d)\.(\d)/g, "$1,$2"))}</p>` : ""));
+  h += karte("Fristen & Dokumente", fx.length ? fx.map((x) => zeile(esc(x.name) + (x.bald ? ' <span class="chip w">bald</span>' : ""),
+      `${datum(x.ablauf)}${x.wiederholung_monate ? " · alle " + x.wiederholung_monate + " Monate" : ""}`,
+      x.tage_bis < 0 ? "abgelaufen" : x.tage_bis + " T.", x.tage_bis < 0 ? "minus" : x.bald ? "warn" : "leise") +
+      (x.wiederholung_monate ? tun("erneuert", "frist_speichern", { name: x.name, erneuert: true }, `${x.name} erneuert?`, "leise") : "")).join("")
+    : `<p class="hinweis">Noch nichts eingetragen – im Chat: „Mein Reisepass läuft im März 2027 ab“</p>`);
   if (fr.beantwortet.length) h += karte("Was ich über dich weiß", fr.beantwortet.map((x) => zeile(esc(x.antwort), esc(x.frage), "")).join(""));
   if (fr.offen.length) h += karte("Offene Fragen", `<p class="hinweis">${fr.offen.length} Fragen warten – im Chat: „Stell mir ein paar Fragen“</p>`);
   return h;
