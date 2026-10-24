@@ -309,6 +309,11 @@ async function seiteGeld() {
       `<input name="kategorie" list="kats" placeholder="Kategorie" style="flex:1 1 40%"><datalist id="kats">${kats.map((x) => `<option value="${esc(x.kategorie)}">`).join("")}</datalist>` +
       `<select name="konto" style="flex:1 1 40%">${k.konten.filter((x) => x.art === "giro" || x.art === "bargeld").map((x) => `<option>${esc(x.konto)}</option>`).join("")}</select>` +
       `<button class="mini" style="flex:1 1 100%">Buchen</button></form>`);
+    const sz = await werkzeug("sparziele_anzeigen").catch(() => null);
+    if (sz && sz.aktiv.length) h += karte("Sparziele", sz.aktiv.map((z) =>
+      `<div class="zeile"><div class="l">${esc(z.name)}<div class="balken"><i style="width:${z.prozent}%"></i></div>` +
+      `<div class="hinweis">${[z.fehlt ? "noch " + z.fehlt : "erreicht 🎉", z.bis ? "bis " + datum(z.bis) : "", z.pro_monat_noetig ? z.pro_monat_noetig + "/Monat" : ""].filter(Boolean).map(esc).join(" · ")}</div></div>` +
+      `<div class="r">${esc(z.stand)}<div class="hinweis">von ${esc(z.ziel)}</div></div></div>`).join(""));
     const gruppen = { giro: "Giro", bargeld: "Bargeld", sparen: "Sparen", depot: "Depot", kredit: "Kredite" };
     h += karte("Gesamt", `<div class="gross ${farbe(k.gesamt_cent)}">${eur(k.gesamt_cent)}</div><p class="hinweis">Guthaben ${eur(k.guthaben_cent)} · Schulden ${eur(k.schulden_cent)}</p>`);
     for (const [art, name] of Object.entries(gruppen)) {
