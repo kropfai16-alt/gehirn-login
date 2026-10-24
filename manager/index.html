@@ -268,7 +268,7 @@ async function seiteStart() {
 async function seiteGeld() {
   $("#titel").textContent = "Geld";
   const t = unter.geld;
-  let h = reiter([["konten", "Konten"], ["buchungen", "Buchungen"], ["wiederkehrend", "Wiederkehrend"], ["abos", "Abos"], ["kredite", "Kredite"]], t, "geld");
+  let h = reiter([["konten", "Konten"], ["buchungen", "Buchungen"], ["wiederkehrend", "Wiederkehrend"], ["abos", "Abos"], ["geteilt", "Geteilt"], ["kredite", "Kredite"]], t, "geld");
   if (t === "konten") {
     const [k, kats] = await Promise.all([werkzeug("konten_anzeigen"), werkzeug("kategorien_anzeigen").catch(() => [])]);
     h += karte("Schnell buchen", `<form class="formular" data-form="buchen">` +
@@ -300,6 +300,20 @@ async function seiteGeld() {
     h += w.wiederkehrend.length ? karte("Alle", w.wiederkehrend.map((d) =>
       zeile(esc(d.name), `${rh[d.rhythmus]}${d.tag ? ", am " + d.tag + "." : ""} · ${esc(d.konto)}${d.nach ? " → " + esc(d.nach) : ""}`, eur(d.art === "ausgabe" ? -d.betrag_cent : d.betrag_cent, d.art !== "umbuchung"),
         farbe(d.art === "umbuchung" ? 0 : d.art === "ausgabe" ? -1 : 1))).join("")) : leer("Noch keine wiederkehrenden Buchungen – im Chat anlegen, z. B. „Miete 800 € am 1.“");
+  } else if (t === "geteilt") {
+    const gruppen = await werkzeug("gruppe_anzeigen");
+    if (!gruppen.length) return h + leer("Noch keine Gruppen – im Chat: „Krakau-Gruppe mit Thomas und Patsch, ich hab 120 € fürs Hotel bezahlt“");
+    const details = await Promise.all(gruppen.map((x) => werkzeug("gruppe_anzeigen", { gruppe: x.gruppe })));
+    for (const d of details) {
+      const mein = d.salden.Ich || 0;
+      h += karte(d.gruppe, `<div class="gross ${farbe(mein)}">${mein > 0 ? "+" : ""}${eur(mein)}</div>` +
+        `<p class="hinweis">${mein > 0 ? "bekommst du" : mein < 0 ? "schuldest du" : "ausgeglichen"} · gesamt ${eur(d.gesamt_cent)}, dein Anteil ${eur(d.mein_anteil_cent)}</p>` +
+        d.ausgleich.map((a) => zeile(`${esc(a.von)} → ${esc(a.an)}`, "", eur(a.betrag_cent) +
+          tun("bezahlt", "gruppe_ausgleich", { gruppe: d.gruppe, von: a.von, an: a.an, betrag_cent: a.betrag_cent },
+            `${a.von} hat ${eur(a.betrag_cent)} an ${a.an} gezahlt?`))).join("") +
+        d.posten.slice(0, 5).map((x) => zeile(`<span class="leise">${esc(x.text || (x.art === "ausgleich" ? "Ausgleich" : "Ausgabe"))}</span>`,
+          datum(x.am) + " · " + esc(x.bezahlt_von), eur(x.betrag_cent), "leise")).join(""));
+    }
   } else if (t === "abos") {
     const c = await werkzeug("abo_check");
     h += karte("Abos & Verträge", `<div class="gross minus">${eur(-c.summe_jahr_cent)}</div><p class="hinweis">pro Jahr · ${eur(c.summe_monat_cent)} pro Monat</p>`);
