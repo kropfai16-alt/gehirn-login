@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#0A0C10">
+<title>Manager</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<!-- Manager: Lese-Ansicht des Gehirns. Liegt auf GitHub Pages, enthält keine Daten. Login wie der Chat (OAuth mit PKCE),
+     danach liest die Seite über die Werkzeuge des MCP-Servers. Ändern geht weiter über den Chat. -->
+<style>
+:root{color-scheme:dark;--bg:#0A0C10;--karte:#12151C;--karte2:#171B24;--linie:rgba(255,255,255,.08);--text:#EEF1F6;--leise:#9AA3B2;
+--akzent:#6EE7B7;--akzent-text:#06281C;--rot:#F9A8A8;--gelb:#FCD34D}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-text-size-adjust:100%}
+body{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+header{position:sticky;top:0;z-index:5;background:rgba(10,12,16,.92);backdrop-filter:blur(10px);padding:calc(10px + env(safe-area-inset-top)) 16px 10px;
+display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--linie)}
+header h1{margin:0;font-size:20px;font-weight:650;letter-spacing:-.01em;flex:1}
+header button{background:none;border:0;color:var(--leise);font-size:14px;padding:6px 8px;border-radius:10px;cursor:pointer}
+main{padding:12px 16px;max-width:760px;margin:0 auto}
+nav{position:fixed;bottom:0;left:0;right:0;z-index:5;display:flex;background:rgba(18,21,28,.97);border-top:1px solid var(--linie);
+padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
+nav button{flex:1;background:none;border:0;color:var(--leise);font-size:11px;display:flex;flex-direction:column;align-items:center;gap:2px;
+padding:6px 0;border-radius:12px;cursor:pointer}
+nav button span{font-size:20px;line-height:1}
+nav button.an{color:var(--akzent)}
+.karte{background:var(--karte);border:1px solid var(--linie);border-radius:18px;padding:14px 16px;margin:0 0 12px}
+.karte h2{margin:0 0 8px;font-size:13px;font-weight:600;color:var(--leise);text-transform:uppercase;letter-spacing:.06em}
+.zeile{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:7px 0;border-top:1px solid var(--linie)}
+.zeile:first-of-type{border-top:0}
+.zeile .l{min-width:0;flex:1}
+.zeile .l small{display:block;color:var(--leise);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.zeile .r{white-space:nowrap;font-variant-numeric:tabular-nums;text-align:right}
+.gross{font-size:28px;font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.minus{color:var(--rot)} .plus{color:var(--akzent)} .leise{color:var(--leise)} .warn{color:var(--gelb)}
+.reiter{display:flex;gap:6px;overflow-x:auto;margin:0 0 12px;padding-bottom:2px;scrollbar-width:none}
+.reiter button{flex:none;background:var(--karte);border:1px solid var(--linie);color:var(--text);border-radius:999px;padding:7px 13px;font-size:13.5px;cursor:pointer}
+.reiter button.an{background:var(--akzent);color:var(--akzent-text);border-color:var(--akzent);font-weight:600}
+.chip{display:inline-block;font-size:11.5px;padding:1px 7px;border-radius:999px;background:var(--karte2);color:var(--leise);margin:2px 4px 0 0}
+.chip.ok{color:var(--akzent)} .chip.w{color:var(--gelb)}
+.knopf{display:block;width:100%;height:50px;border-radius:25px;border:0;background:var(--akzent);color:var(--akzent-text);font-size:16px;
+font-weight:600;cursor:pointer;margin-top:14px}
+.hinweis{color:var(--leise);font-size:13px;margin:6px 0 0}
+.leer{color:var(--leise);text-align:center;padding:26px 8px}
+.balken{height:6px;border-radius:3px;background:var(--karte2);overflow:hidden;margin-top:5px}
+.balken i{display:block;height:100%;background:var(--akzent)}
+.klick{cursor:pointer}
+input[type=search]{width:100%;height:42px;border-radius:14px;border:1px solid var(--linie);background:var(--karte);color:var(--text);
+padding:0 14px;font-size:15px;margin:0 0 12px;outline:none}
+.schritt{padding:6px 0 6px 28px;position:relative;border-top:1px solid var(--linie)}
+.schritt b{position:absolute;left:0;top:6px;color:var(--akzent)}
+.fehler{color:var(--rot)}
+.laden{opacity:.55}
+</style>
+</head>
+<body>
+<header><h1 id="titel">Manager</h1><button id="neu" title="Neu laden">↻</button><button id="ab" hidden>Abmelden</button></header>
+<main id="inhalt"><p class="leer">Lädt …</p></main>
+<nav id="nav" hidden>
+  <button data-seite="start"><span>🏠</span>Heute</button>
+  <button data-seite="geld"><span>💶</span>Geld</button>
+  <button data-seite="kueche"><span>🥕</span>Küche</button>
+  <button data-seite="filme"><span>🎬</span>Filme</button>
+</nav>
+<script>
+"use strict";
+const SERVER = window.GEHIRN_SERVER || "https://cwuqbuyhdyrmmcykrymc.supabase.co/functions/v1/mcp";  // Überschreiben nur im Test
+const RUECK = location.origin + location.pathname.replace(/index\.html$/, "");
+const SPEICHER = "manager.v1";
+
+// ---------- Hilfen ----------
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const eur = (c, vz = false) => {
+  if (c === null || c === undefined) return "–";
+  const s = (Math.abs(c) / 100).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+  return c < 0 ? "−" + s : (vz && c > 0 ? "+" + s : s);
+};
+const farbe = (c) => (c < 0 ? "minus" : c > 0 ? "plus" : "");
+const datum = (d) => d ? new Date(String(d).length === 10 ? d + "T12:00:00" : d).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }) : "";
+const tagkurz = (d) => d ? new Date(d + "T12:00:00").toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" }) : "";
+const menge = (m, e) => m === null || m === undefined ? "" : `${Number(m).toLocaleString("de-DE", { maximumFractionDigits: 1 })} ${e ?? ""}`.trim();
+const b64url = (b) => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const zufall = (n = 32) => b64url(crypto.getRandomValues(new Uint8Array(n)));
+
+function laden() { try { return JSON.parse(localStorage.getItem(SPEICHER) || "{}"); } catch { return {}; } }
+function sichern(z) { try { localStorage.setItem(SPEICHER, JSON.stringify(z)); } catch { } }
+let zustand = laden();
+
+// ---------- Anmeldung (OAuth 2.1 mit PKCE, wie der Chat) ----------
+async function anmelden() {
+  if (!zustand.client_id) {
+    const r = await fetch(SERVER + "/register", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ client_name: "Manager-App", redirect_uris: [RUECK] }) });
+    if (!r.ok) throw new Error("Registrierung fehlgeschlagen");
+    zustand.client_id = (await r.json()).client_id;
+  }
+  const verifier = zufall(48);
+  const state = zufall(16);
+  const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
+  zustand.pkce = { verifier, state };
+  sichern(zustand);
+  const u = new URL(SERVER + "/authorize");
+  u.search = new URLSearchParams({ response_type: "code", client_id: zustand.client_id, redirect_uri: RUECK,
+    code_challenge: challenge, code_challenge_method: "S256", state, scope: "gehirn", resource: SERVER });
+  location.href = u.toString();
+}
+
+async function tokenHolen(params) {
+  const r = await fetch(SERVER + "/token", { method: "POST", body: new URLSearchParams({ client_id: zustand.client_id, ...params }) });
+  if (!r.ok) return false;
+  const t = await r.json();
+  zustand.access = t.access_token;
+  zustand.refresh = t.refresh_token;
+  zustand.ablauf = Date.now() + (t.expires_in - 60) * 1000;
+  sichern(zustand);
+  return true;
+}
+
+async function rueckkehrPruefen() {
+  const p = new URLSearchParams(location.search);
+  if (!p.get("code")) return;
+  history.replaceState(null, "", RUECK);
+  if (!zustand.pkce || p.get("state") !== zustand.pkce.state) throw new Error("Anmeldung ungültig, bitte erneut");
+  const ok = await tokenHolen({ grant_type: "authorization_code", code: p.get("code"), redirect_uri: RUECK, code_verifier: zustand.pkce.verifier });
+  delete zustand.pkce;
+  sichern(zustand);
+  if (!ok) throw new Error("Anmeldung fehlgeschlagen, bitte erneut");
+}
+
+async function gueltigesToken() {
+  if (zustand.access && Date.now() < (zustand.ablauf || 0)) return zustand.access;
+  if (zustand.refresh && await tokenHolen({ grant_type: "refresh_token", refresh_token: zustand.refresh })) return zustand.access;
+  return null;
+}
+
+// ---------- Werkzeuge des Gehirns aufrufen (nur lesende) ----------
+let rpcId = 0;
+async function werkzeug(name, args = {}) {
+  let token = await gueltigesToken();
+  if (!token) throw new Error("ANMELDEN");
+  const rufe = (t) => fetch(SERVER, { method: "POST", headers: { authorization: "Bearer " + t, "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: ++rpcId, method: "tools/call", params: { name, arguments: args } }) });
+  let r = await rufe(token);
+  if (r.status === 401) {
+    zustand.ablauf = 0;
+    token = await gueltigesToken();
+    if (!token) throw new Error("ANMELDEN");
+    r = await rufe(token);
+  }
+  if (!r.ok) throw new Error(`Server antwortet nicht (${r.status})`);
+  const j = await r.json();
+  if (j.error) throw new Error(j.error.message);
+  const daten = JSON.parse(j.result.content[0].text);
+  if (j.result.isError) throw new Error(daten.fehler || "Fehler");
+  return daten;
+}
+
+// ---------- Darstellung ----------
+const karte = (titel, inhalt) => `<section class="karte">${titel ? `<h2>${esc(titel)}</h2>` : ""}${inhalt}</section>`;
+const zeile = (l, sub, r, cls = "", attr = "") =>
+  `<div class="zeile ${attr ? "klick" : ""}" ${attr}><div class="l">${l}${sub ? `<small>${sub}</small>` : ""}</div><div class="r ${cls}">${r ?? ""}</div></div>`;
+const leer = (t) => `<p class="leer">${esc(t)}</p>`;
+const reiter = (liste, aktiv, name) => `<div class="reiter">${liste.map(([k, t]) =>
+  `<button class="${k === aktiv ? "an" : ""}" data-${name}="${k}">${esc(t)}</button>`).join("")}</div>`;
+
+let seite = (location.hash.slice(1).split("/")[0]) || "start";
+const unter = { geld: "konten", kueche: "einkauf", filme: "merkliste" };
+let suche = "";
+
+async function zeigen() {
+  document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("an", b.dataset.seite === seite));
+  const ziel = $("#inhalt");
+  ziel.classList.add("laden");
+  try {
+    ziel.innerHTML = await ({ start: seiteStart, geld: seiteGeld, kueche: seiteKueche, filme: seiteFilme, rezept: seiteRezept }[seite] || seiteStart)();
+  } catch (e) {
+    if (e.message === "ANMELDEN") return zeigeLogin();
+    ziel.innerHTML = karte("", `<p class="fehler">${esc(e.message)}</p><button class="knopf" onclick="zeigen()">Nochmal</button>`);
+  } finally {
+    ziel.classList.remove("laden");
+  }
+}
+
+async function seiteStart() {
+  $("#titel").textContent = "Heute";
+  const [u, p] = await Promise.all([werkzeug("ueberblick"), werkzeug("cashflow_prognose", { tage: 30 }).catch(() => null)]);
+  const a = u.ausgaben_budgetmonat || {};
+  const [von, bis] = (a.zeitraum || "").split(" bis ");
+  let h = karte(`Budgetmonat ${datum(von).slice(0, 6)} – ${datum(bis).slice(0, 6)}`,
+    `<div class="gross minus">${eur(-(a.summe_cent || 0))}</div><p class="hinweis">ausgegeben · Einnahmen ${eur(a.einnahmen_cent || 0)}</p>` +
+    Object.entries(a.kategorien || {}).slice(0, 6).map(([k, v]) => {
+      const pz = a.summe_cent ? Math.round(100 * v / a.summe_cent) : 0;
+      return `<div class="zeile"><div class="l">${esc(k)}<div class="balken"><i style="width:${pz}%"></i></div></div><div class="r">${eur(v)}</div></div>`;
+    }).join(""));
+  if ((u.erwartete_buchungen || []).length) {
+    h += karte("Erwartet", u.erwartete_buchungen.map((e) =>
+      zeile(esc(e.auftrag), `${tagkurz(e.termin)} · ${esc(e.konto)}${e.nach ? " → " + esc(e.nach) : ""}${e.ueberfaellig ? ' · <span class="warn">überfällig</span>' : ""}`,
+        e.art === "umbuchung" ? eur(e.betrag_cent) : eur(e.betrag_cent, true), e.art === "umbuchung" ? "leise" : farbe(e.betrag_cent))).join(""));
+  }
+  if (p) {
+    h += karte("Prognose Giro + Bargeld", `<div class="zeile"><div class="l">Heute</div><div class="r">${eur(p.stand_heute_cent)}</div></div>` +
+      (p.wochen || []).map((w) => zeile("bis " + datum(w.bis), "", eur(w.stand_cent), farbe(w.stand_cent < 0 ? -1 : 0))).join("") +
+      `<p class="hinweis">Tiefster Stand ${eur(p.tiefster_stand?.stand_cent)} am ${datum(p.tiefster_stand?.am)} · variable Ausgaben ca. ${eur(p.variable_ausgaben_pro_tag_cent)}/Tag</p>`);
+  }
+  if ((u.bald_ablaufend || []).length) {
+    h += karte("Bald aufbrauchen", u.bald_ablaufend.map((v) =>
+      zeile(esc(v.produkt), v.stand === "wahrscheinlich" ? "wahrscheinlich da" : "", v.tage_bis_mhd <= 0 ? "heute" : `in ${v.tage_bis_mhd} T.`, v.tage_bis_mhd <= 1 ? "warn" : "")).join(""));
+  }
+  h += karte("", zeile("Einkaufsliste", "", `${u.einkaufsliste_offen || 0} offen ›`, "", 'data-geh="kueche/einkauf"') +
+    (u.letzter_bon ? zeile("Letzter Bon", esc(u.letzter_bon.markt) + " · " + datum(u.letzter_bon.am), eur(u.letzter_bon.summe_cent)) : ""));
+  if ((u.offene_fragen || []).length) h += karte("Offene Fragen", u.offene_fragen.map((f) => zeile(esc(f.frage), "im Chat beantworten", "")).join(""));
+  if ((u.notizen || []).length) h += karte("Gemerkt", u.notizen.map((n) => zeile(esc(n.text), esc(n.bereich), "")).join(""));
+  return h;
+}
+
+async function seiteGeld() {
+  $("#titel").textContent = "Geld";
+  const t = unter.geld;
+  let h = reiter([["konten", "Konten"], ["buchungen", "Buchungen"], ["wiederkehrend", "Wiederkehrend"], ["kredite", "Kredite"]], t, "geld");
+  if (t === "konten") {
+    const k = await werkzeug("konten_anzeigen");
+    const gruppen = { giro: "Giro", bargeld: "Bargeld", sparen: "Sparen", depot: "Depot", kredit: "Kredite" };
+    h += karte("Gesamt", `<div class="gross ${farbe(k.gesamt_cent)}">${eur(k.gesamt_cent)}</div><p class="hinweis">Guthaben ${eur(k.guthaben_cent)} · Schulden ${eur(k.schulden_cent)}</p>`);
+    for (const [art, name] of Object.entries(gruppen)) {
+      const liste = k.konten.filter((x) => x.art === art);
+      if (liste.length) h += karte(name, liste.map((x) => zeile(esc(x.konto), "", eur(x.stand_cent), farbe(x.stand_cent), `data-konto="${esc(x.konto)}"`)).join(""));
+    }
+  } else if (t === "buchungen") {
+    const filter = zustand.kontoFilter ? { konto: zustand.kontoFilter } : {};
+    const b = await werkzeug("buchungen_anzeigen", { ...filter, max: 100 });
+    if (zustand.kontoFilter) h += `<p class="hinweis">Konto: <b>${esc(zustand.kontoFilter)}</b> · <a href="#" data-alle="1" style="color:var(--akzent)">alle zeigen</a></p>`;
+    h += b.buchungen.length ? karte(`${b.anzahl} Buchungen`, b.buchungen.map((x) =>
+      zeile(esc(x.kategorie || (x.art === "umbuchung" ? "Umbuchung" : x.art)), `${datum(x.am)} · ${esc(x.konto)}${x.notiz ? " · " + esc(x.notiz) : ""}`,
+        x.art === "umbuchung" ? eur(x.betrag_cent) : eur(x.betrag_cent, true), x.art === "umbuchung" ? "leise" : farbe(x.betrag_cent))).join("")) : leer("Keine Buchungen");
+  } else if (t === "wiederkehrend") {
+    const w = await werkzeug("wiederkehrende_anzeigen", { tage: 31 });
+    h += w.erwartet.length ? karte("Nächste 31 Tage", w.erwartet.map((e) =>
+      zeile(esc(e.auftrag), tagkurz(e.termin) + (e.nach ? " · → " + esc(e.nach) : "") + (e.ueberfaellig ? ' · <span class="warn">überfällig</span>' : ""),
+        e.art === "umbuchung" ? eur(e.betrag_cent) : eur(e.betrag_cent, true), e.art === "umbuchung" ? "leise" : farbe(e.betrag_cent))).join("")) : "";
+    const rh = { woechentlich: "wöchentlich", monatlich: "monatlich", vierteljaehrlich: "vierteljährlich", halbjaehrlich: "halbjährlich", jaehrlich: "jährlich" };
+    h += w.wiederkehrend.length ? karte("Alle", w.wiederkehrend.map((d) =>
+      zeile(esc(d.name), `${rh[d.rhythmus]}${d.tag ? ", am " + d.tag + "." : ""} · ${esc(d.konto)}${d.nach ? " → " + esc(d.nach) : ""}`, eur(d.art === "ausgabe" ? -d.betrag_cent : d.betrag_cent, d.art !== "umbuchung"),
+        farbe(d.art === "umbuchung" ? 0 : d.art === "ausgabe" ? -1 : 1))).join("")) : leer("Noch keine wiederkehrenden Buchungen – im Chat anlegen, z. B. „Miete 800 € am 1.“");
+  } else {
+    const k = await werkzeug("kredite_anzeigen");
+    h += karte("Restschuld gesamt", `<div class="gross minus">${eur(-k.restschuld_gesamt_cent)}</div>`);
+    h += k.kredite.map((x) => karte(x.konto,
+      zeile("Restschuld", "", eur(-x.restschuld_cent), "minus") + zeile("Zins / Rate", "", `${String(x.zins_prozent).replace(".", ",")} % · ${eur(x.rate_cent)}`) +
+      zeile("Zinsen nächster Monat", "", eur(x.zins_naechster_monat_cent)) +
+      zeile("Abbezahlt", x.monate_bis_abbezahlt ? x.monate_bis_abbezahlt + " Monate" : "", x.abbezahlt_am ? datum(x.abbezahlt_am) : "–") +
+      zeile("Zinsen bis zum Ende", "", eur(x.zinsen_gesamt_cent)) + (x.sondertilgung_erlaubt ? `<span class="chip ok">Sondertilgung erlaubt</span>` : ""))).join("");
+    if (k.ohne_konditionen.length) h += karte("Ohne Konditionen", k.ohne_konditionen.map((x) => zeile(esc(x.konto), "im Chat Zins und Rate nennen", eur(-x.restschuld_cent), "minus")).join(""));
+  }
+  return h;
+}
+
+async function seiteKueche() {
+  $("#titel").textContent = "Küche";
+  const t = unter.kueche;
+  let h = reiter([["einkauf", "Einkaufsliste"], ["vorrat", "Vorrat"], ["rezepte", "Rezepte"], ["kochen", "Was kochen?"]], t, "kueche");
+  if (t === "einkauf") {
+    const l = await werkzeug("einkaufsliste_anzeigen", { erledigte: true });
+    h += l.offen.length ? karte(`${l.offen.length} offen`, l.offen.map((e) =>
+      zeile(esc(e.text) + (e.warnungen ? ' <span class="chip w">⚠ ' + esc(e.warnungen.map((w) => w.gegenstand).join(", ")) + "</span>" : ""),
+        [e.notiz, e.im_vorrat ? "da: " + e.im_vorrat : ""].filter(Boolean).map(esc).join(" · "), menge(e.menge, e.einheit))).join("")) : leer("Einkaufsliste ist leer");
+    if ((l.zuletzt_erledigt || []).length) h += karte("Zuletzt gekauft", l.zuletzt_erledigt.slice(0, 8).map((e) => zeile(`<span class="leise">${esc(e.text)}</span>`, datum(e.am) + (e.per_bon ? " · per Bon" : ""), "✓", "plus")).join(""));
+  } else if (t === "vorrat") {
+    const v = await werkzeug("vorrat_anzeigen", { filter: "alle" });
+    h += v.length ? karte(`${v.length} Produkte`, v.map((x) =>
+      zeile(esc(x.produkt), (x.stand === "wahrscheinlich" ? "wahrscheinlich da" : "bestätigt") + (x.mhd ? " · MHD " + datum(x.mhd) : ""), menge(x.menge, x.einheit),
+        x.tage_bis_mhd !== null && x.tage_bis_mhd <= 2 ? "warn" : "")).join("")) : leer("Kein Vorrat erfasst – Kassenbon im Chat schicken");
+  } else if (t === "rezepte" || t === "kochen") {
+    const r = await werkzeug("rezepte_suchen", { vorrat: t === "kochen", anzahl: 20 });
+    h += r.length ? karte(t === "kochen" ? "Passt zum Vorrat" : `${r.length} Rezepte`, r.map((x) =>
+      zeile(esc(x.titel) + (x.warnungen ? ' <span class="chip w">⚠</span>' : ""),
+        [x.zeit_min ? x.zeit_min + " Min." : "", x.portionen ? x.portionen + " Port." : "", x.zutaten_vorhanden ? x.zutaten_vorhanden + " da" : "",
+         x.fehlt && x.fehlt.length ? "fehlt: " + x.fehlt.join(", ") : ""].filter(Boolean).map(esc).join(" · "), "›", "leise", `data-rezept="${x.rezept_id}"`)).join(""))
+      : leer("Noch keine Rezepte – im Chat einen Link schicken: „Speicher das Rezept: …“");
+  }
+  return h;
+}
+
+async function seiteRezept() {
+  const id = location.hash.split("/")[1];
+  const r = await werkzeug("rezept_anzeigen", { rezept_id: id });
+  $("#titel").textContent = "Rezept";
+  let h = karte("", `<div style="font-size:21px;font-weight:650">${esc(r.titel)}</div><p class="hinweis">${[r.portionen ? r.portionen + " Portionen" : "", r.zeit_min ? r.zeit_min + " Min." : ""].filter(Boolean).join(" · ")}</p>` +
+    (r.warnungen && r.warnungen.length ? `<p class="warn">⚠ ${esc(r.warnungen.map((w) => w.gegenstand).join(", "))}</p>` : ""));
+  h += karte("Zutaten", r.zutaten.map((z) => zeile(esc(z.text), z.unklar ? "Menge unklar" : "", z.im_vorrat === true ? "✓ da" : z.im_vorrat === false ? "fehlt" : "",
+    z.im_vorrat === true ? "plus" : z.im_vorrat === false ? "warn" : "")).join(""));
+  if (r.schritte.length) h += karte("Zubereitung", r.schritte.map((s, i) => `<div class="schritt"><b>${i + 1}</b>${esc(s)}</div>`).join(""));
+  if (r.quelle_url) h += `<p class="hinweis"><a href="${esc(r.quelle_url)}" target="_blank" rel="noopener" style="color:var(--akzent)">Original öffnen</a></p>`;
+  return `<p><a href="#kueche" style="color:var(--akzent)">‹ Zurück</a></p>` + h;
+}
+
+async function seiteFilme() {
+  $("#titel").textContent = "Filme & Serien";
+  const t = unter.filme;
+  let h = reiter([["tipp", "Was schauen?"], ["merkliste", "Merkliste"], ["weiter", "Weiterschauen"], ["gesehen", "Gesehen"], ["statistik", "Statistik"]], t, "filme");
+  const film = (x) => zeile(esc(x.titel) + (x.jahr ? ` <span class="leise">${x.jahr}</span>` : ""),
+    [x.typ === "serie" ? "Serie" + (x.folgen ? " · " + x.folgen : "") : (x.laufzeit_min ? x.laufzeit_min + " Min." : "Film"),
+     (x.genres || []).join(", "), x.naechste_folge ? `weiter: S${x.naechste_folge.staffel} F${x.naechste_folge.folge}` : "", x.warum || ""].filter(Boolean).map(esc).join(" · ") +
+    (x.streaming ? "<br>" + x.streaming.map((s) => `<span class="chip ${x.bei_meinen_diensten ? "ok" : ""}">${esc(s)}</span>`).join("") : ""),
+    x.bewertung ? "★ " + x.bewertung : (x.tmdb_wertung ? `<span class="leise">${String(x.tmdb_wertung).replace(".", ",")}</span>` : ""));
+  if (t === "tipp") {
+    const v = await werkzeug("was_schauen", { anzahl: 5 });
+    h += v.length ? karte("Vorschläge für heute", v.map(film).join("")) : leer("Merkliste ist leer – im Chat: „Merk dir Dune Teil 2“");
+  } else if (t === "statistik") {
+    const s = await werkzeug("filme_statistik");
+    h += karte("Gesehen", zeile("Filme", "", s.filme_gesehen) + zeile("Serien", "", s.serien_gesehen) + zeile("Folgen", "", s.folgen_gesehen) +
+      zeile("Stunden", "", s.stunden_geschaut) + zeile("Schnitt Bewertung", "", s.schnitt_bewertung ? "★ " + String(s.schnitt_bewertung).replace(".", ",") : "–") + zeile("Merkliste", "", s.merkliste));
+    if (s.lieblingsgenres) h += karte("Lieblingsgenres", s.lieblingsgenres.map((g) => `<span class="chip ok">${esc(g)}</span>`).join(""));
+    if (s.je_dienst) h += karte("Lohnt sich das Abo?", Object.entries(s.je_dienst).map(([d, x]) => zeile(esc(d), "", `${x.gesehen} gesehen · ${x.merkliste} gemerkt`)).join(""));
+  } else {
+    h += `<input type="search" id="suche" placeholder="Suchen …" value="${esc(suche)}">`;
+    const f = t === "weiter" ? { weiterschauen: true } : { status: t };
+    const l = await werkzeug("filme_anzeigen", { ...f, ...(suche ? { text: suche } : {}), max: 100 });
+    h += l.titel.length ? karte(`${l.anzahl} Titel`, l.titel.map(film).join("")) : leer("Nichts gefunden");
+  }
+  return h;
+}
+
+function zeigeLogin(fehler = "") {
+  $("#nav").hidden = true;
+  $("#ab").hidden = true;
+  $("#titel").textContent = "Manager";
+  $("#inhalt").innerHTML = karte("", `<div style="font-size:22px;font-weight:650">Dein Gehirn auf einen Blick</div>
+    <p class="hinweis">Konten, Buchungen, Einkaufsliste, Vorrat, Rezepte und Filme. Nur ansehen – ändern geht weiter im Chat.</p>
+    ${fehler ? `<p class="fehler">${esc(fehler)}</p>` : ""}<button class="knopf" id="login">Mit Gehirn-Passwort anmelden</button>`);
+  $("#login").onclick = () => anmelden().catch((e) => zeigeLogin(e.message));
+}
+
+// ---------- Ereignisse ----------
+document.addEventListener("click", (ev) => {
+  const z = ev.target.closest("[data-seite],[data-geld],[data-kueche],[data-filme],[data-rezept],[data-geh],[data-konto],[data-alle]");
+  if (!z) return;
+  ev.preventDefault();
+  const d = z.dataset;
+  if (d.seite) { seite = d.seite; location.hash = seite; }
+  if (d.geld) { unter.geld = d.geld; if (d.geld !== "buchungen") zustand.kontoFilter = null; }
+  if (d.kueche) unter.kueche = d.kueche;
+  if (d.filme) { unter.filme = d.filme; suche = ""; }
+  if (d.konto) { zustand.kontoFilter = d.konto; unter.geld = "buchungen"; }
+  if (d.alle) zustand.kontoFilter = null;
+  if (d.geh) { const [s, u] = d.geh.split("/"); seite = s; if (u) unter[s] = u; location.hash = s; }
+  if (d.rezept) { seite = "rezept"; location.hash = "rezept/" + d.rezept; }
+  window.scrollTo(0, 0);
+  zeigen();
+});
+let suchTimer;
+document.addEventListener("input", (ev) => {
+  if (ev.target.id !== "suche") return;
+  clearTimeout(suchTimer);
+  suchTimer = setTimeout(async () => { suche = ev.target.value.trim(); await zeigen(); const s = $("#suche"); if (s) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); } }, 350);
+});
+window.addEventListener("hashchange", () => {
+  const s = location.hash.slice(1).split("/")[0] || "start";
+  if (s !== seite) { seite = s; zeigen(); }
+});
+$("#neu").onclick = () => zeigen();
+$("#ab").onclick = () => { zustand = { client_id: zustand.client_id }; sichern(zustand); zeigeLogin(); };
+
+(async () => {
+  try {
+    await rueckkehrPruefen();
+  } catch (e) {
+    return zeigeLogin(e.message);
+  }
+  if (!(await gueltigesToken())) return zeigeLogin();
+  $("#nav").hidden = false;
+  $("#ab").hidden = false;
+  zeigen();
+})();
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
