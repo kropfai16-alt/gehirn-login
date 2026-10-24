@@ -178,7 +178,7 @@ async function zeigen() {
   const ziel = $("#inhalt");
   ziel.classList.add("laden");
   try {
-    ziel.innerHTML = await ({ start: seiteStart, geld: seiteGeld, kueche: seiteKueche, filme: seiteFilme, rezept: seiteRezept, faehig: seiteFaehig, sport: seiteSport, leute: seiteLeute }[seite] || seiteStart)();
+    ziel.innerHTML = await ({ start: seiteStart, geld: seiteGeld, kueche: seiteKueche, filme: seiteFilme, rezept: seiteRezept, faehig: seiteFaehig, sport: seiteSport, leute: seiteLeute, urlaub: seiteUrlaub }[seite] || seiteStart)();
   } catch (e) {
     if (e.message === "ANMELDEN") return zeigeLogin();
     ziel.innerHTML = karte("", `<p class="fehler">${esc(e.message)}</p><button class="knopf" onclick="zeigen()">Nochmal</button>`);
@@ -230,6 +230,7 @@ async function seiteStart() {
   } else {
     h += karte("", zeile("Freunde & Familie", "", "›", "leise", 'data-leute=""'));
   }
+  h += karte("", zeile("Urlaub & Reisen", "Resturlaub, Brückentage, Reisen", "›", "leise", 'data-seite="urlaub"'));
   if (u.sport_woche) {
     const sw = u.sport_woche;
     h += karte("Sport", zeile(`${sw.erledigt} von ${sw.ziel} Einheiten diese Woche`, (u.sport_heute || []).map((p) =>
@@ -334,6 +335,28 @@ async function seiteKueche() {
 }
 
 const SPORT = { laufen: "🏃 Laufen", rad: "🚴 Rad", kraft: "💪 Kraft daheim", tennis: "🎾 Tennis", sonstiges: "Sport" };
+
+async function seiteUrlaub() {
+  $("#titel").textContent = "Urlaub & Reisen";
+  const [u, r, b] = await Promise.all([werkzeug("urlaub_anzeigen"), werkzeug("reisen_anzeigen"), werkzeug("brueckentage", { max_tage: 3 })]);
+  const zahl = (x) => String(x).replace(".", ",");
+  let h = `<p><a href="#start" style="color:var(--akzent)">‹ Zurück</a></p>`;
+  h += karte(`Urlaub ${u.jahr}`, `<div class="gross ${u.noch_frei > 0 ? "plus" : ""}">${zahl(u.noch_frei)} Tage frei</div>` +
+    `<p class="hinweis">Anspruch ${zahl(u.anspruch)} · genommen ${zahl(u.genommen)} · geplant ${zahl(u.geplant)}</p>` +
+    (u.rest_verfaellt ? `<p class="warn">${zahl(u.rest_verfaellt.tage)} Tage Resturlaub verfallen am ${datum(u.rest_verfaellt.am)}</p>` : ""));
+  if (r.kommend.length) h += karte("Kommende Reisen", r.kommend.map((x) => zeile(esc(x.name),
+    [datum(x.von) + " – " + datum(x.bis), (x.mitreisende || []).join(", "), x.budget_cent ? "Budget " + eur(x.budget_cent) : ""].filter(Boolean).map(esc).join(" · "),
+    x.in_tagen !== undefined ? `in ${x.in_tagen} T.` : "jetzt", "leise")).join(""));
+  if (r.ideen.length) h += karte("Reiseideen", r.ideen.map((x) => zeile(esc(x.name), [x.zeitraum, (x.mitreisende || []).join(", ")].filter(Boolean).map(esc).join(" · "), "💡")).join(""));
+  const ab = u.abwesenheiten.filter((a) => a.bis >= new Date().toISOString().slice(0, 10));
+  if (ab.length) h += karte("Eingetragen", ab.map((a) => zeile(esc({ urlaub: "Urlaub", halber_tag: "½ Tag", gleittag: "Gleittag", frei: "Frei", krank: "Krank" }[a.art]) +
+    (a.reise ? ` <span class="leise">${esc(a.reise)}</span>` : ""), datum(a.von) + (a.bis !== a.von ? " – " + datum(a.bis) : "") + " · " + esc(a.status),
+    a.urlaubstage ? zahl(a.urlaubstage) + " T." : "", a.status === "geplant" ? "warn" : "")).join(""));
+  if (b.length) h += karte("Brückentage", b.slice(0, 5).map((x) => zeile(`${x.urlaubstage} Tag${x.urlaubstage > 1 ? "e" : ""} → ${x.freie_tage} frei`,
+    datum(x.von) + " – " + datum(x.bis) + " · " + esc((x.feiertage || []).join(", ")), "", "plus")).join(""));
+  if (u.naechste_feiertage) h += karte("Nächste Feiertage", u.naechste_feiertage.map((f) => zeile(esc(f.name), tagkurz(f.tag), "")).join(""));
+  return h;
+}
 
 async function seiteLeute() {
   const wer = decodeURIComponent(location.hash.split("/")[1] || "");
