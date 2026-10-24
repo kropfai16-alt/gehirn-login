@@ -355,14 +355,17 @@ async function seiteGeld() {
     }
   } else if (t === "abos") {
     const c = await werkzeug("abo_check");
-    h += karte("Abos & Verträge", `<div class="gross minus">${eur(-c.summe_jahr_cent)}</div><p class="hinweis">pro Jahr · ${eur(c.summe_monat_cent)} pro Monat</p>`);
+    h += karte("Abos & Verträge", `<div class="gross minus">${eur(-c.summe_monat_cent)}</div><p class="hinweis">pro Monat · ${eur(c.summe_jahr_cent)} pro Jahr</p>` +
+      `<p class="hinweis">Kündbare Verträge wie Streaming, Handy, Fitness, Versicherungen. Ich warne dich vor Kündigungsfristen und sage dir, was du kaum nutzt.</p>`);
     h += c.abos.length ? karte(`${c.abos.length} Verträge`, c.abos.map((a) => zeile(esc(a.name) +
         (c.kaum_genutzt.includes(a.name) ? ' <span class="chip w">kaum genutzt</span>' : "") +
         (a.tage_bis_frist !== undefined && a.tage_bis_frist <= 45 ? ` <span class="chip w">kündigen bis ${datum(a.kuendigen_bis)}</span>` : ""),
-      [a.vertragsart, eur(a.pro_monat_cent) + "/Monat", a.laufzeit_ende ? "läuft bis " + datum(a.laufzeit_ende) : "",
+      [a.vertragsart, eur(a.pro_jahr_cent) + "/Jahr", a.laufzeit_ende ? "läuft bis " + datum(a.laufzeit_ende) : "",
        a.nutzung_90_tage ? `${a.nutzung_90_tage.titel} Titel, ${a.nutzung_90_tage.folgen} Folgen in 90 T.` : "", a.fehlt ? "fehlt: " + a.fehlt : ""]
-        .filter(Boolean).map(esc).join(" · "), eur(-a.pro_jahr_cent), "minus")).join(""))
+        .filter(Boolean).map(esc).join(" · "), eur(-a.pro_monat_cent) + "/Monat", "minus")).join(""))
       : leer("Noch keine Abos angelegt – im Chat: „Netflix 13,99 € jeden Monat am 3.“");
+    if ((c.feste_kosten || []).length) h += karte("Feste Kosten (keine Abos)", c.feste_kosten.map((x) => zeile(esc(x.name), "", eur(-x.pro_monat_cent) + "/Monat", "minus")).join("") +
+      `<p class="hinweis">Nur zur Info – zusammen ${eur(c.feste_kosten_monat_cent)} pro Monat.</p>`);
     if (c.noch_nicht_angelegt.length) h += karte("Sieht regelmäßig aus", c.noch_nicht_angelegt.map((x) => zeile(esc(x.name), "im Chat anlegen", eur(-x.betrag_cent), "minus")).join(""));
   } else {
     const k = await werkzeug("kredite_anzeigen");
