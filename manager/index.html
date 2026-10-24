@@ -217,8 +217,8 @@ async function zeigen() {
 
 async function seiteStart() {
   $("#titel").textContent = "Heute";
-  const [u, p, f, fr] = await Promise.all([werkzeug("ueberblick"), werkzeug("cashflow_prognose", { tage: 30 }).catch(() => null),
-    werkzeug("was_kannst_du").catch(() => null), werkzeug("fragen_anzeigen").catch(() => null)]);
+  const [u, p, f, fr, auf] = await Promise.all([werkzeug("ueberblick"), werkzeug("cashflow_prognose", { tage: 30 }).catch(() => null),
+    werkzeug("was_kannst_du").catch(() => null), werkzeug("fragen_anzeigen").catch(() => null), werkzeug("aufgaben_anzeigen").catch(() => null)]);
   const a = u.ausgaben_budgetmonat || {};
   const [von, bis] = (a.zeitraum || "").split(" bis ");
   let h = "";
@@ -227,6 +227,13 @@ async function seiteStart() {
   if ((u.erinnerungen || []).length) h += karte("Erinnerungen", u.erinnerungen.map((e) => zeile("⏰ " + esc(e.text),
     `${e.wochentag} ${e.faellig_am.slice(8, 10)}.${e.faellig_am.slice(5, 7)}. ${e.faellig_am.slice(11)}` + (e.wiederholung ? " · " + esc(e.wiederholung) : ""),
     tun("✓", "erinnerung_aendern", { id: e.id, status: "erledigt" }))).join(""));
+  if (auf) h += karte(`Aufgaben${auf.offen.length ? " (" + auf.offen.length + ")" : ""}`, auf.offen.slice(0, 6).map((a) => zeile(
+      esc(a.titel) + (a.prioritaet === 1 ? ' <span class="chip w">wichtig</span>' : ""),
+      [a.faellig ? (a.ueberfaellig ? "überfällig seit " : "fällig ") + tagkurz(a.faellig) : "", ({ taeglich: "täglich", woechentlich: "wöchentlich", monatlich: "monatlich", jaehrlich: "jährlich" })[a.wiederholung] || ""].filter(Boolean).map(esc).join(" · "),
+      tun("✓", "aufgabe_aendern", { id: a.id, status: "erledigt" }), a.ueberfaellig ? "warn" : "")).join("") +
+    (auf.offen.length > 6 ? `<p class="hinweis">… und ${auf.offen.length - 6} weitere</p>` : "") +
+    `<form class="formular" data-form="aufgabe" style="margin-top:8px"><input name="titel" placeholder="Neue Aufgabe" autocomplete="off" style="flex:1 1 55%">` +
+    `<input name="faellig" type="date" style="flex:1 1 30%"><button class="mini">+</button></form>`);
   h += karte("Wie geht's dir heute?", `<div style="display:flex;justify-content:space-between">` +
     ["😫", "😕", "😐", "🙂", "😄"].map((e, i) => tun(`<span style="font-size:24px">${e}</span>`, "gesundheit_erfassen", { stimmung: i + 1 })).join("") +
     `</div>` + zeile("Mehr: Schlaf, Energie, Trends, was ich über dich weiß", "", "›", "leise", 'data-seite="ich"'));
@@ -239,9 +246,15 @@ async function seiteStart() {
   h += karte(`Budgetmonat ${datum(von).slice(0, 6)} – ${datum(bis).slice(0, 6)}`,
     `<div class="gross minus">${eur(-(a.summe_cent || 0))}</div><p class="hinweis">ausgegeben · Einnahmen ${eur(a.einnahmen_cent || 0)}</p>` +
     Object.entries(a.kategorien || {}).sort((x, y) => y[1] - x[1]).map(([k, v]) => {
+      const bud = (a.budgets || {})[k];
+      if (bud) {
+        const pz = Math.round(100 * v / bud), f = pz >= 100 ? "var(--rot)" : pz >= 90 ? "var(--gelb)" : "";
+        return `<div class="zeile"><div class="l">${esc(k)}<div class="balken"><i style="width:${Math.min(100, pz)}%${f ? ";background:" + f : ""}"></i></div>` +
+          `<div class="hinweis">${pz >= 100 ? "über Budget" : "noch " + eur(bud - v)} von ${eur(bud)}</div></div><div class="r">${eur(v)}</div></div>`;
+      }
       const pz = a.summe_cent ? Math.max(0, Math.round(100 * v / a.summe_cent)) : 0;
       return `<div class="zeile"><div class="l">${esc(k)}<div class="balken"><i style="width:${pz}%"></i></div></div><div class="r">${eur(v)}</div></div>`;
-    }).join(""));
+    }).join("") + (a.budgets ? "" : zeile("Budgets pro Kategorie festlegen", "im Chat: „Für Essen gehen höchstens 150 € im Monat“", "", "leise")));
   if ((u.erwartete_buchungen || []).length) {
     h += karte("Erwartet", u.erwartete_buchungen.map((e) =>
       zeile(esc(e.auftrag), `${tagkurz(e.termin)} · ${esc(e.konto)}${e.nach ? " → " + esc(e.nach) : ""}${e.ueberfaellig ? ' · <span class="warn">überfällig</span>' : ""}`,
@@ -673,6 +686,9 @@ document.addEventListener("submit", async (ev) => {
     const t = (d.text || "").trim();
     if (!t) return;
     [name, args, ok] = ["einkauf_hinzufuegen", { eintraege: t.split(/\s*,\s*/).filter(Boolean).map((x) => ({ produkt: x, text: x })) }, "Auf der Liste ✓"];
+  } else if (f.dataset.form === "aufgabe") {
+    if (!(d.titel || "").trim()) return toast("Was ist zu tun?");
+    [name, args, ok] = ["aufgabe_merken", { titel: d.titel.trim(), ...(d.faellig ? { faellig: d.faellig } : {}) }, "Aufgabe gemerkt ✓"];
   } else if (f.dataset.form === "gesundheit") {
     const zahl = (x) => (x && String(x).trim() ? parseFloat(String(x).replace(",", ".")) : undefined);
     const a = { schlaf_h: zahl(d.schlaf_h), gewicht_kg: zahl(d.gewicht_kg) };
