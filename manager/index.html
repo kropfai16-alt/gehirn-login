@@ -513,6 +513,15 @@ async function seiteUrlaub() {
   if (r.kommend.length) h += karte("Kommende Reisen", r.kommend.map((x) => zeile(esc(x.name),
     [datum(x.von) + " – " + datum(x.bis), (x.mitreisende || []).join(", "), x.budget_cent ? "Budget " + eur(x.budget_cent) : ""].filter(Boolean).map(esc).join(" · "),
     x.in_tagen !== undefined ? `in ${x.in_tagen} T.` : "jetzt", "leise")).join(""));
+  const naechste = r.kommend.find((x) => x.in_tagen !== undefined && x.in_tagen <= 21);
+  if (naechste) {
+    const pl = await werkzeug("packliste", { reise: naechste.name }).catch(() => null);
+    if (pl && pl.gesamt) h += karte(`Packliste ${pl.reise} · ${pl.offen} offen`, Object.entries(pl.liste).map(([k, dinge]) =>
+      `<p class="hinweis" style="margin:8px 0 2px">${esc(k)}</p>` + dinge.map((d) =>
+        zeile(d.gepackt ? `<span class="leise"><s>${esc(d.text)}</s></span>` : esc(d.text), "",
+          tun(d.gepackt ? "↺" : "✓", "packliste", { reise: pl.reise, [d.gepackt ? "ungepackt" : "gepackt"]: [d.text] }, "", d.gepackt ? "leise" : ""))).join("")).join(""));
+    else if (pl) h += karte(`Packliste ${pl.reise}`, `<p class="hinweis">Im Chat: „Mach mir eine Packliste für ${esc(pl.reise)}“</p>`);
+  }
   if (r.ideen.length) h += karte("Reiseideen", r.ideen.map((x) => zeile(esc(x.name), [x.zeitraum, (x.mitreisende || []).join(", ")].filter(Boolean).map(esc).join(" · "), "💡")).join(""));
   const ab = u.abwesenheiten.filter((a) => a.bis >= new Date().toISOString().slice(0, 10));
   if (ab.length) h += karte("Eingetragen", ab.map((a) => zeile(esc({ urlaub: "Urlaub", halber_tag: "½ Tag", gleittag: "Gleittag", frei: "Frei", krank: "Krank" }[a.art]) +
