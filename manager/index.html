@@ -217,8 +217,8 @@ async function zeigen() {
 
 async function seiteStart() {
   $("#titel").textContent = "Heute";
-  const [u, p, f] = await Promise.all([werkzeug("ueberblick"), werkzeug("cashflow_prognose", { tage: 30 }).catch(() => null),
-    werkzeug("was_kannst_du").catch(() => null)]);
+  const [u, p, f, fr] = await Promise.all([werkzeug("ueberblick"), werkzeug("cashflow_prognose", { tage: 30 }).catch(() => null),
+    werkzeug("was_kannst_du").catch(() => null), werkzeug("fragen_anzeigen").catch(() => null)]);
   const a = u.ausgaben_budgetmonat || {};
   const [von, bis] = (a.zeitraum || "").split(" bis ");
   let h = "";
@@ -227,7 +227,12 @@ async function seiteStart() {
   if ((u.erinnerungen || []).length) h += karte("Erinnerungen", u.erinnerungen.map((e) => zeile("⏰ " + esc(e.text),
     `${e.wochentag} ${e.faellig_am.slice(8, 10)}.${e.faellig_am.slice(5, 7)}. ${e.faellig_am.slice(11)}` + (e.wiederholung ? " · " + esc(e.wiederholung) : ""),
     tun("✓", "erinnerung_aendern", { id: e.id, status: "erledigt" }))).join(""));
-  if ((u.anstoesse || []).length) h += karte("Steht an", u.anstoesse.map((a) => zeile(esc(a), "im Chat erledigen", "")).join(""));
+  if (fr && fr.heute) h += karte("Frage an dich", `<p style="margin:0 0 8px">${esc(fr.heute.frage)}</p>` +
+    (fr.heute.warum ? `<p class="hinweis" style="margin-top:-4px">${esc(fr.heute.warum)}</p>` : "") +
+    `<form class="formular" data-form="frage"><input type="hidden" name="id" value="${esc(fr.heute.id)}"><input name="antwort" placeholder="Deine Antwort" autocomplete="off" style="flex:1 1 100%">` +
+    `<button class="mini" style="flex:1 1 40%">Antworten</button></form>` + tun("später", "frage_beantworten", { id: fr.heute.id, spaeter: true }, "", "leise"));
+  const anst = (u.anstoesse || []).filter((a) => !a.startsWith("Frage des Tages"));
+  if (anst.length) h += karte("Steht an", anst.map((a) => zeile(esc(a), "im Chat erledigen", "")).join(""));
   h += karte(`Budgetmonat ${datum(von).slice(0, 6)} – ${datum(bis).slice(0, 6)}`,
     `<div class="gross minus">${eur(-(a.summe_cent || 0))}</div><p class="hinweis">ausgegeben · Einnahmen ${eur(a.einnahmen_cent || 0)}</p>` +
     Object.entries(a.kategorien || {}).sort((x, y) => y[1] - x[1]).map(([k, v]) => {
@@ -642,6 +647,9 @@ document.addEventListener("submit", async (ev) => {
     const t = (d.text || "").trim();
     if (!t) return;
     [name, args, ok] = ["einkauf_hinzufuegen", { eintraege: t.split(/\s*,\s*/).filter(Boolean).map((x) => ({ produkt: x, text: x })) }, "Auf der Liste ✓"];
+  } else if (f.dataset.form === "frage") {
+    if (!(d.antwort || "").trim()) return toast("Antwort fehlt");
+    [name, args, ok] = ["frage_beantworten", { id: d.id, antwort: d.antwort.trim() }, "Danke, gemerkt ✓"];
   } else if (f.dataset.form === "buchen") {
     const cent = Math.round(parseFloat(String(d.betrag).replace(",", ".")) * 100);
     if (!cent) return toast("Betrag fehlt");
