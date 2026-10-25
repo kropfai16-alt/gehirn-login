@@ -219,6 +219,7 @@ async function seiteStart() {
   $("#titel").textContent = "Heute";
   // Ein Aufruf statt vieler paralleler (schont die Datenbankverbindungen); alter Weg nur, falls der Server ihn noch nicht kennt.
   const alles = await werkzeug("app_heute").catch(() => null);
+  const nachrichten = (alles && alles.nachrichten) || [];
   const [u, p, f, fr, auf, gw] = alles
     ? [alles.ueberblick, alles.prognose, alles.neu ? { neu: alles.neu } : null, alles.fragen, alles.aufgaben, alles.gewohnheiten]
     : await Promise.all([werkzeug("ueberblick"), werkzeug("cashflow_prognose", { tage: 30 }).catch(() => null),
@@ -244,6 +245,9 @@ async function seiteStart() {
       (x.heute ? `<span class="leise"><s>${esc(x.name)}</s></span>` : esc(x.name)),
       `<span style="letter-spacing:1px">${esc(x.letzte_14.slice(-7))}</span> · ${x.pro_woche === 7 ? "Serie " + esc(x.serie) : x.diese_woche + "/" + x.pro_woche + " diese Woche"}`,
       tun(x.heute ? "↺" : "✓", "gewohnheit", { id: x.id, geschafft: !x.heute }, "", x.heute ? "leise" : ""))).join(""));
+  if (nachrichten.length) h += karte("📬 Nachrichten", nachrichten.slice(0, 4).map((n) =>
+    `<div style="margin:0 0 10px"><b>${esc(n.titel)}</b>${n.neu ? ' <span class="chip w">neu</span>' : ""} <span class="hinweis">${esc(n.zeit)}</span>` +
+    `<div style="white-space:pre-line;margin-top:2px">${esc(n.text)}</div></div>`).join(""));
   if (u.einrichtung && u.einrichtung.naechster) h += karte(`🧭 Einrichten · ${esc(u.einrichtung.fortschritt)}`,
     `<p style="margin:0 0 4px"><b>${esc(u.einrichtung.naechster.titel)}</b></p><p class="hinweis" style="margin:0">${esc(u.einrichtung.naechster.warum)} ` +
     `Sag im Manager-Chat einfach „Lass uns das einrichten“.</p>`);
