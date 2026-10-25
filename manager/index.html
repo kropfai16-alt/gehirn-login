@@ -244,6 +244,8 @@ async function seiteStart() {
       (x.heute ? `<span class="leise"><s>${esc(x.name)}</s></span>` : esc(x.name)),
       `<span style="letter-spacing:1px">${esc(x.letzte_14.slice(-7))}</span> · ${x.pro_woche === 7 ? "Serie " + esc(x.serie) : x.diese_woche + "/" + x.pro_woche + " diese Woche"}`,
       tun(x.heute ? "↺" : "✓", "gewohnheit", { id: x.id, geschafft: !x.heute }, "", x.heute ? "leise" : ""))).join(""));
+  if ((u.check_in || []).length) h += karte("💬 Check-in", u.check_in.slice(0, 3).map((x) => `<p style="margin:0 0 6px">${esc(x.frage)}</p>`).join("") +
+    `<p class="hinweis">Einfach im Manager-Chat erzählen – oder unten antippen.</p>`);
   h += karte("Wie geht's dir heute?", `<div style="display:flex;justify-content:space-between">` +
     ["😫", "😕", "😐", "🙂", "😄"].map((e, i) => tun(`<span style="font-size:24px">${e}</span>`, "gesundheit_erfassen", { stimmung: i + 1 })).join("") +
     `</div>` + zeile("Mehr: Schlaf, Trends, Fristen &amp; Dokumente, was ich über dich weiß", "", "›", "leise", 'data-seite="ich"'));
