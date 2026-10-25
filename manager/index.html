@@ -217,9 +217,13 @@ async function zeigen() {
 
 async function seiteStart() {
   $("#titel").textContent = "Heute";
-  const [u, p, f, fr, auf, gw] = await Promise.all([werkzeug("ueberblick"), werkzeug("cashflow_prognose", { tage: 30 }).catch(() => null),
-    werkzeug("was_kannst_du").catch(() => null), werkzeug("fragen_anzeigen").catch(() => null), werkzeug("aufgaben_anzeigen").catch(() => null),
-    werkzeug("gewohnheiten_anzeigen").catch(() => null)]);
+  // Ein Aufruf statt vieler paralleler (schont die Datenbankverbindungen); alter Weg nur, falls der Server ihn noch nicht kennt.
+  const alles = await werkzeug("app_heute").catch(() => null);
+  const [u, p, f, fr, auf, gw] = alles
+    ? [alles.ueberblick, alles.prognose, alles.neu ? { neu: alles.neu } : null, alles.fragen, alles.aufgaben, alles.gewohnheiten]
+    : await Promise.all([werkzeug("ueberblick"), werkzeug("cashflow_prognose", { tage: 30 }).catch(() => null),
+      werkzeug("was_kannst_du").catch(() => null), werkzeug("fragen_anzeigen").catch(() => null), werkzeug("aufgaben_anzeigen").catch(() => null),
+      werkzeug("gewohnheiten_anzeigen").catch(() => null)]);
   const a = u.ausgaben_budgetmonat || {};
   const [von, bis] = (a.zeitraum || "").split(" bis ");
   let h = "";
