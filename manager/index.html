@@ -578,7 +578,7 @@ async function seiteLeute() {
     const aus = lo && lo.alle ? karte("Ausgehen", ((lo.lieblinge || []).length ? `<p class="hinweis" style="margin:4px 0">Lieblinge</p>` + lo.lieblinge.map(lokZeile).join("") : "") +
       ((lo.wunschliste || []).length ? `<p class="hinweis" style="margin:8px 0 4px">Will ich mal hin</p>` + lo.wunschliste.map(lokZeile).join("") : "")) : "";
     return zurueck + aus + karte(`${l.length} Personen`, l.map((p) => zeile(esc(p.person),
-      [p.geburtstag ? "🎂 " + p.geburtstag : "", p.zuletzt_kontakt ? "zuletzt " + datum(p.zuletzt_kontakt) : "",
+      [p.kontakt_faellig ? "📞 mal wieder melden" : "", p.geburtstag ? "🎂 " + p.geburtstag : "", p.zuletzt_kontakt ? "zuletzt " + datum(p.zuletzt_kontakt) : "",
        p.offene_geschenkideen ? p.offene_geschenkideen + " Geschenkidee(n)" : ""].filter(Boolean).map(esc).join(" · "),
       p.tage_bis_geburtstag !== undefined ? `in ${p.tage_bis_geburtstag} T.` : "›", "leise", `data-leute="${esc(p.person)}"`)).join("")) +
       `<p class="hinweis">Neues im Chat erzählen, z. B. „Alex hat am 17.05. Geburtstag und klettert gern“.</p>`;
