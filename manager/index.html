@@ -320,6 +320,13 @@ async function seiteGeld() {
       `<div class="zeile"><div class="l">${esc(z.name)}<div class="balken"><i style="width:${z.prozent}%"></i></div>` +
       `<div class="hinweis">${[z.fehlt ? "noch " + z.fehlt : "erreicht 🎉", z.bis ? "bis " + datum(z.bis) : "", z.pro_monat_noetig ? z.pro_monat_noetig + "/Monat" : ""].filter(Boolean).map(esc).join(" · ")}</div></div>` +
       `<div class="r">${esc(z.stand)}<div class="hinweis">von ${esc(z.ziel)}</div></div></div>`).join(""));
+    const tb = await werkzeug("tanken").catch(() => null);
+    if (tb && (tb.letzte || []).length) h += karte("⛽ Tankbuch", zeile("Verbrauch", "Schnitt der letzten Füllungen",
+        tb.verbrauch_schnitt ? String(tb.verbrauch_schnitt).replace(".", ",") + " l/100 km" : "–") +
+      (tb.kosten_pro_100km ? zeile("Kosten", "pro 100 km", esc(tb.kosten_pro_100km)) : "") +
+      zeile("Spritpreis", tb.preis_schnitt_90_tage ? "Schnitt 90 Tage " + esc(tb.preis_schnitt_90_tage) : "", esc(tb.preis_zuletzt || "")) +
+      tb.letzte.slice(0, 3).map((x) => zeile(esc(x.betrag), `${datum(x.am)} · ${String(x.liter).replace(".", ",")} l${x.ort ? " · " + esc(x.ort) : ""}`,
+        x.verbrauch_l_100km ? String(x.verbrauch_l_100km).replace(".", ",") + " l" : "", "leise")).join(""));
     const gruppen = { giro: "Giro", bargeld: "Bargeld", sparen: "Sparen", depot: "Depot", kredit: "Kredite" };
     h += karte("Gesamt", `<div class="gross ${farbe(k.gesamt_cent)}">${eur(k.gesamt_cent)}</div><p class="hinweis">Guthaben ${eur(k.guthaben_cent)} · Schulden ${eur(k.schulden_cent)}</p>`);
     for (const [art, name] of Object.entries(gruppen)) {
