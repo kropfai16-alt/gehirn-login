@@ -206,7 +206,7 @@ async function zeigen() {
   const ziel = $("#inhalt");
   ziel.classList.add("laden");
   try {
-    ziel.innerHTML = await ({ start: seiteStart, geld: seiteGeld, kueche: seiteKueche, filme: seiteFilme, rezept: seiteRezept, faehig: seiteFaehig, sport: seiteSport, leute: seiteLeute, urlaub: seiteUrlaub, ich: seiteIch }[seite] || seiteStart)();
+    ziel.innerHTML = await ({ start: seiteStart, geld: seiteGeld, kueche: seiteKueche, filme: seiteFilme, rezept: seiteRezept, faehig: seiteFaehig, sport: seiteSport, leute: seiteLeute, urlaub: seiteUrlaub, ich: seiteIch, woche: seiteWoche }[seite] || seiteStart)();
   } catch (e) {
     if (e.message === "ANMELDEN") return zeigeLogin();
     ziel.innerHTML = karte("", `<p class="fehler">${esc(e.message)}</p><button class="knopf" onclick="zeigen()">Nochmal</button>`);
@@ -225,6 +225,7 @@ async function seiteStart() {
   let h = "";
   if (f && f.neu.length) h += karte("Neu im Manager", f.neu.slice(0, 4).map((n) => zeile(esc(n.text), [n.bereich, n.beispiel ? "„" + n.beispiel + "“" : ""].filter(Boolean).map(esc).join(" · "), "")).join("") +
     zeile("Alles, was der Manager kann", "", "›", "leise", 'data-seite="faehig"'));
+  h += `<div class="karte" style="padding:4px 14px">${zeile("📅 Woche im Überblick", "Wetter, Termine, Essen, Sport", "›", "leise", 'data-seite="woche"')}</div>`;
   if ((u.erinnerungen || []).length) h += karte("Erinnerungen", u.erinnerungen.map((e) => zeile("⏰ " + esc(e.text),
     `${e.wochentag} ${e.faellig_am.slice(8, 10)}.${e.faellig_am.slice(5, 7)}. ${e.faellig_am.slice(11)}` + (e.wiederholung ? " · " + esc(e.wiederholung) : ""),
     tun("✓", "erinnerung_aendern", { id: e.id, status: "erledigt" }))).join(""));
@@ -477,6 +478,23 @@ function kalender(monat, u, reisen) {
   h += `<p class="hinweis" style="margin-top:8px"><span class="chip ok">■ Urlaub</span><span class="chip" style="color:#93B4F5">■ Gleittag</span>` +
     `<span class="chip" style="color:var(--rot)">■ krank</span><span class="chip w">Feiertag · ▬ Reise</span> blass = noch nicht beantragt. Längere Zeiträume im Chat.</p>`;
   return karte("Kalender", h);
+}
+
+async function seiteWoche() {
+  $("#titel").textContent = "Woche";
+  const w = await werkzeug("woche", { tage: 7 });
+  const teile = (t) => [
+    t.feiertag && "🎉 " + t.feiertag, t.reise && "🧳 " + t.reise, !t.reise && t.frei && "🌴 " + ({ urlaub: "Urlaub", halber_tag: "½ Tag frei", gleittag: "Gleittag", frei: "frei", krank: "krank" }[t.frei] || t.frei),
+    ...(t.termine || []).map((x) => "📅 " + x), ...(t.geburtstage || []).map((x) => "🎂 " + x), ...(t.erinnerungen || []).map((x) => "⏰ " + x), ...(t.aufgaben || []).map((x) => "✅ " + x),
+    ...(t.fristen || []).map((x) => "📄 " + x), ...(t.essen || []).map((x) => "🍽️ " + x), ...(t.sport || []).map((x) => "🏃 " + x),
+    ...(t.zahlungen || []).map((x) => "💶 " + x)].filter(Boolean);
+  let h = `<p><a href="#start" style="color:var(--akzent)">‹ Zurück</a></p>`;
+  for (const t of w) {
+    const l = teile(t);
+    h += karte(`${t.wochentag} ${datum(t.tag).slice(0, 6)}`, (t.wetter ? `<p class="hinweis" style="margin-top:0">${esc(t.wetter)}</p>` : "") +
+      (l.length ? l.map((x) => `<div class="zeile"><div class="l">${esc(x)}</div></div>`).join("") : `<p class="hinweis">Noch nichts geplant</p>`));
+  }
+  return h + `<p class="hinweis">Lücken füllen im Chat: „Plan meine Woche“</p>`;
 }
 
 async function seiteIch() {
