@@ -428,12 +428,26 @@ async function seiteKueche() {
       zeile(esc(x.produkt || x.text), esc(x.fuer), menge(x.menge, x.einheit))).join("") + `<p class="hinweis">Im Chat: „Setz den Wochenplan auf die Einkaufsliste“</p>`);
   } else if (t === "einkauf") {
     const l = await werkzeug("einkaufsliste_anzeigen", { erledigte: true });
-    h += karte("", `<form class="formular" data-form="einkauf"><input name="text" placeholder="Was fehlt? (z. B. Milch, Spülmittel)" autocomplete="off">` +
-      `<button class="mini">Dazu</button></form>`);
-    h += l.offen.length ? karte(`${l.offen.length} offen`, l.offen.map((e) =>
-      zeile(esc(e.text) + (e.warnungen ? ' <span class="chip w">⚠ ' + esc(e.warnungen.map((w) => w.gegenstand).join(", ")) + "</span>" : ""),
-        [e.notiz, e.im_vorrat ? "da: " + e.im_vorrat : ""].filter(Boolean).map(esc).join(" · "),
-        menge(e.menge, e.einheit) + tun("✓", "einkauf_abhaken", { ids: [e.id] }))).join("")) : leer("Einkaufsliste ist leer");
+    const laeden = [...new Set(["Lebensmittel", "Drogerie", "Apotheke", "Hagebau", ...Object.keys(l.geschaefte || {})])];
+    h += karte("", `<form class="formular" data-form="einkauf"><input name="text" placeholder="Was fehlt? (z. B. Milch, Spülmittel)" autocomplete="off" style="flex:1 1 100%">` +
+      `<select name="geschaeft" style="flex:1 1 45%"><option value="">Geschäft: auto</option>${laeden.map((x) => `<option>${esc(x)}</option>`).join("")}</select>` +
+      `<label style="flex:1 1 25%;display:flex;align-items:center;gap:6px"><input type="checkbox" name="eilig" style="width:20px;height:20px;flex:none;padding:0;margin:0"> eilig</label>` +
+      `<button class="mini" style="flex:1 1 20%">Dazu</button></form>`);
+    const filter = zustand.laden || "";
+    const offen = l.offen.filter((e) => !filter || e.geschaeft === filter);
+    if (Object.keys(l.geschaefte || {}).length > 1) h += `<div class="reiter" style="margin:-4px 0 10px">` +
+      [["", "Alle"], ...Object.entries(l.geschaefte).map(([g, n]) => [g, `${g} (${n})`])].map(([g, txt]) =>
+        `<button class="${g === filter ? "an" : ""}" data-laden="${esc(g)}">${esc(txt)}</button>`).join("") + `</div>`;
+    const zeileE = (e) => zeile(esc(e.text) + (e.eilig ? ' <span class="chip w">eilig</span>' : "") +
+        (e.warnungen ? ' <span class="chip w">⚠ ' + esc(e.warnungen.map((w) => w.gegenstand).join(", ")) + "</span>" : ""),
+      [e.eilig ? e.geschaeft : "", e.notiz, e.im_vorrat ? "da: " + e.im_vorrat : ""].filter(Boolean).map(esc).join(" · "),
+      menge(e.menge, e.einheit) + tun(e.eilig ? "⏳" : "⚡", "einkauf_aendern", { ids: [e.id], eilig: !e.eilig }, "", "leise") + tun("✓", "einkauf_abhaken", { ids: [e.id] }));
+    const eilig = offen.filter((e) => e.eilig);
+    if (eilig.length) h += karte(`⚡ Eilig (${eilig.length})`, eilig.map(zeileE).join(""));
+    const gruppen = {};
+    for (const e of offen.filter((e) => !e.eilig)) (gruppen[e.geschaeft || "Lebensmittel"] ||= []).push(e);
+    h += Object.keys(gruppen).length ? Object.entries(gruppen).map(([g, liste]) => karte(`${g} (${liste.length})`, liste.map(zeileE).join(""))).join("")
+      : eilig.length ? "" : leer("Einkaufsliste ist leer");
     if ((l.vielleicht_auch || []).length) h += karte("Vielleicht auch", l.vielleicht_auch.map((x) =>
       zeile(esc(x.produkt), `kaufst du etwa alle ${x.alle_tage} Tage · zuletzt vor ${x.zuletzt_vor_tagen}`,
         tun("+", "einkauf_hinzufuegen", { eintraege: [{ produkt: x.produkt }] }))).join(""));
@@ -498,7 +512,7 @@ async function seiteWoche() {
     t.feiertag && "🎉 " + t.feiertag, t.reise && "🧳 " + t.reise, !t.reise && t.frei && "🌴 " + ({ urlaub: "Urlaub", halber_tag: "½ Tag frei", gleittag: "Gleittag", frei: "frei", krank: "krank" }[t.frei] || t.frei),
     ...(t.termine || []).map((x) => "📅 " + x), ...(t.geburtstage || []).map((x) => "🎂 " + x), ...(t.erinnerungen || []).map((x) => "⏰ " + x), ...(t.aufgaben || []).map((x) => "✅ " + x),
     ...(t.fristen || []).map((x) => "📄 " + x), ...(t.essen || []).map((x) => "🍽️ " + x), ...(t.sport || []).map((x) => "🏃 " + x),
-    ...(t.zahlungen || []).map((x) => "💶 " + x)].filter(Boolean);
+    ...(t.zahlungen || []).map((x) => "💶 " + x), ...(t.vorhaben || []).map((x) => "🗓️ " + x)].filter(Boolean);
   let h = `<p><a href="#start" style="color:var(--akzent)">‹ Zurück</a></p>`;
   for (const t of w) {
     const l = teile(t);
@@ -510,22 +524,29 @@ async function seiteWoche() {
 
 async function seiteIch() {
   $("#titel").textContent = "Ich";
-  const [g, fr, fx] = await Promise.all([werkzeug("gesundheit_anzeigen"), werkzeug("fragen_anzeigen"), werkzeug("fristen_anzeigen").catch(() => [])]);
+  const [g, fr, fx, tb] = await Promise.all([werkzeug("gesundheit_anzeigen"), werkzeug("fragen_anzeigen"), werkzeug("fristen_anzeigen").catch(() => []),
+    werkzeug("tagebuch", { tage: 7 }).catch(() => null)]);
   const sterne = (n, feld, icons) => `<div style="display:flex;justify-content:space-between">` +
     icons.map((e, i) => tun(`<span style="font-size:22px">${e}</span>`, "gesundheit_erfassen", { [feld]: i + 1 })).join("") + `</div>`;
   let h = `<p><a href="#start" style="color:var(--akzent)">‹ Zurück</a></p>`;
   h += karte("Heute", `<p class="hinweis">Stimmung</p>` + sterne(0, "stimmung", ["😫", "😕", "😐", "🙂", "😄"]) +
     `<p class="hinweis">Energie</p>` + sterne(0, "energie", ["🪫", "😴", "😐", "⚡", "🚀"]) +
     `<p class="hinweis">Schlafqualität</p>` + sterne(0, "schlaf_qualitaet", ["😵", "🥱", "😐", "😌", "😴"]) +
+    `<p class="hinweis">Stress</p>` + sterne(0, "stress", ["😌", "🙂", "😐", "😣", "🤯"]) +
     `<form class="formular" data-form="gesundheit" style="margin-top:10px"><input name="schlaf_h" inputmode="decimal" placeholder="Schlaf in Stunden" style="flex:1 1 40%">` +
     `<input name="gewicht_kg" inputmode="decimal" placeholder="Gewicht kg" style="flex:1 1 40%"><button class="mini" style="flex:1 1 100%">Speichern</button></form>`);
   const s7 = g.letzte_7, s30 = g.letzte_30;
   const z = (x) => (x === undefined || x === null ? "–" : String(x).replace(".", ","));
   if (s7) h += karte("Schnitt", zeile("", "7 Tage", "30 Tage", "leise") +
     zeile("Schlaf", "", `${z(s7.schlaf)} h · ${z(s30?.schlaf)} h`) + zeile("Stimmung", "", `${z(s7.stimmung)} · ${z(s30?.stimmung)}`) +
-    zeile("Energie", "", `${z(s7.energie)} · ${z(s30?.energie)}`) +
+    zeile("Energie", "", `${z(s7.energie)} · ${z(s30?.energie)}`) + (s7.stress ? zeile("Stress", "", `${z(s7.stress)} · ${z(s30?.stress)}`) : "") +
     (g.gewicht ? zeile("Gewicht", g.gewicht.vor_30_tagen ? "vor 30 Tagen " + z(g.gewicht.vor_30_tagen) + " kg" : "", z(g.gewicht.aktuell) + " kg") : "") +
     (g.sport_und_schlaf ? `<p class="hinweis">${esc(g.sport_und_schlaf.replace(/(\d)\.(\d)/g, "$1,$2"))}</p>` : ""));
+  const ICON = { erlebt: "✨", erledigt: "✅", gefuehl: "💭", gedanke: "💡" };
+  if (tb) h += karte("Tagebuch (7 Tage)", (tb.eintraege.length ? tb.eintraege.slice(0, 12).map((x) =>
+      zeile((ICON[x.art] || "•") + " " + esc(x.text), datum(x.am) + (x.personen ? " · " + esc(x.personen.join(", ")) : ""), "")).join("")
+      : `<p class="hinweis">Erzähl im Chat einfach, was du gemacht hast – z. B. „Heute Steuer erledigt, war stressig“.</p>`) +
+    (tb.vorhaben.length ? `<p class="hinweis" style="margin:8px 0 2px">Vorhaben</p>` + tb.vorhaben.map((x) => zeile("🗓️ " + esc(x.text), datum(x.am), "")).join("") : ""));
   h += karte("Fristen & Dokumente", fx.length ? fx.map((x) => zeile(esc(x.name) + (x.bald ? ' <span class="chip w">bald</span>' : ""),
       `${datum(x.ablauf)}${x.wiederholung_monate ? " · alle " + x.wiederholung_monate + " Monate" : ""}`,
       x.tage_bis < 0 ? "abgelaufen" : x.tage_bis + " T.", x.tage_bis < 0 ? "minus" : x.bald ? "warn" : "leise") +
@@ -761,7 +782,8 @@ document.addEventListener("submit", async (ev) => {
   if (f.dataset.form === "einkauf") {
     const t = (d.text || "").trim();
     if (!t) return;
-    [name, args, ok] = ["einkauf_hinzufuegen", { eintraege: t.split(/\s*,\s*/).filter(Boolean).map((x) => ({ produkt: x, text: x })) }, "Auf der Liste ✓"];
+    const extra = { ...(d.geschaeft ? { geschaeft: d.geschaeft } : {}), ...(d.eilig ? { eilig: true } : {}) };
+    [name, args, ok] = ["einkauf_hinzufuegen", { eintraege: t.split(/\s*,\s*/).filter(Boolean).map((x) => ({ produkt: x, text: x, ...extra })) }, "Auf der Liste ✓"];
   } else if (f.dataset.form === "aufgabe") {
     if (!(d.titel || "").trim()) return toast("Was ist zu tun?");
     [name, args, ok] = ["aufgabe_merken", { titel: d.titel.trim(), ...(d.faellig ? { faellig: d.faellig } : {}) }, "Aufgabe gemerkt ✓"];
@@ -792,7 +814,7 @@ document.addEventListener("submit", async (ev) => {
 });
 
 document.addEventListener("click", (ev) => {
-  const z = ev.target.closest("[data-filmtyp],[data-kal],[data-kaltag],[data-leute],[data-seite],[data-geld],[data-kueche],[data-filme],[data-person],[data-rezept],[data-geh],[data-konto],[data-alle]");
+  const z = ev.target.closest("[data-filmtyp],[data-kal],[data-kaltag],[data-leute],[data-seite],[data-geld],[data-kueche],[data-filme],[data-person],[data-rezept],[data-geh],[data-konto],[data-alle],[data-laden]");
   if (!z) return;
   ev.preventDefault();
   const d = z.dataset;
@@ -804,6 +826,7 @@ document.addEventListener("click", (ev) => {
   if (d.filmtyp !== undefined) zustand.filmTyp = d.filmtyp;
   if (d.konto) { zustand.kontoFilter = d.konto; unter.geld = "buchungen"; }
   if (d.alle) zustand.kontoFilter = null;
+  if (d.laden !== undefined) { zustand.laden = d.laden; return zeigen(); }
   if (d.geh) { const [s, u] = d.geh.split("/"); seite = s; if (u) unter[s] = u; location.hash = s; }
   if (d.rezept) { seite = "rezept"; location.hash = "rezept/" + d.rezept; }
   if (d.kal) {
