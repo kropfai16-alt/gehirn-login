@@ -533,13 +533,18 @@ async function seiteIch() {
     `<p class="hinweis">Energie</p>` + sterne(0, "energie", ["🪫", "😴", "😐", "⚡", "🚀"]) +
     `<p class="hinweis">Schlafqualität</p>` + sterne(0, "schlaf_qualitaet", ["😵", "🥱", "😐", "😌", "😴"]) +
     `<p class="hinweis">Stress</p>` + sterne(0, "stress", ["😌", "🙂", "😐", "😣", "🤯"]) +
-    `<form class="formular" data-form="gesundheit" style="margin-top:10px"><input name="schlaf_h" inputmode="decimal" placeholder="Schlaf in Stunden" style="flex:1 1 40%">` +
+    `<form class="formular" data-form="gesundheit" style="margin-top:10px">` +
+    `<label class="hinweis" style="flex:1 1 30%">ins Bett<input name="ins_bett" type="time"></label>` +
+    `<label class="hinweis" style="flex:1 1 30%">Wecker<input name="wecker" type="time"></label>` +
+    `<label class="hinweis" style="flex:1 1 30%">aufgewacht<input name="aufgewacht" type="time"></label>` +
+    `<input name="schlaf_h" inputmode="decimal" placeholder="Schlaf in Stunden" style="flex:1 1 40%">` +
     `<input name="gewicht_kg" inputmode="decimal" placeholder="Gewicht kg" style="flex:1 1 40%"><button class="mini" style="flex:1 1 100%">Speichern</button></form>`);
   const s7 = g.letzte_7, s30 = g.letzte_30;
   const z = (x) => (x === undefined || x === null ? "–" : String(x).replace(".", ","));
   if (s7) h += karte("Schnitt", zeile("", "7 Tage", "30 Tage", "leise") +
     zeile("Schlaf", "", `${z(s7.schlaf)} h · ${z(s30?.schlaf)} h`) + zeile("Stimmung", "", `${z(s7.stimmung)} · ${z(s30?.stimmung)}`) +
-    zeile("Energie", "", `${z(s7.energie)} · ${z(s30?.energie)}`) + (s7.stress ? zeile("Stress", "", `${z(s7.stress)} · ${z(s30?.stress)}`) : "") +
+    zeile("Energie", "", `${z(s7.energie)} · ${z(s30?.energie)}`) + (s7.stress ? zeile("Stress", "", `${z(s7.stress)} · ${z(s30?.stress)}`) : "") + (s7.ins_bett ? zeile("Ins Bett / aufgewacht", "", `${s7.ins_bett} / ${s7.aufgewacht || "–"}`) : "") +
+    (s7.snooze_min != null ? zeile("Nach dem Wecker", "im Schnitt", `${s7.snooze_min} Min.`) : "") +
     (g.gewicht ? zeile("Gewicht", g.gewicht.vor_30_tagen ? "vor 30 Tagen " + z(g.gewicht.vor_30_tagen) + " kg" : "", z(g.gewicht.aktuell) + " kg") : "") +
     (g.sport_und_schlaf ? `<p class="hinweis">${esc(g.sport_und_schlaf.replace(/(\d)\.(\d)/g, "$1,$2"))}</p>` : ""));
   const ICON = { erlebt: "✨", erledigt: "✅", gefuehl: "💭", gedanke: "💡" };
@@ -789,8 +794,9 @@ document.addEventListener("submit", async (ev) => {
     [name, args, ok] = ["aufgabe_merken", { titel: d.titel.trim(), ...(d.faellig ? { faellig: d.faellig } : {}) }, "Aufgabe gemerkt ✓"];
   } else if (f.dataset.form === "gesundheit") {
     const zahl = (x) => (x && String(x).trim() ? parseFloat(String(x).replace(",", ".")) : undefined);
-    const a = { schlaf_h: zahl(d.schlaf_h), gewicht_kg: zahl(d.gewicht_kg) };
-    if (a.schlaf_h === undefined && a.gewicht_kg === undefined) return toast("Bitte Schlaf oder Gewicht eintragen");
+    const a = { schlaf_h: zahl(d.schlaf_h), gewicht_kg: zahl(d.gewicht_kg), ins_bett: d.ins_bett || undefined, wecker: d.wecker || undefined,
+                aufgewacht: d.aufgewacht || undefined };
+    if (Object.values(a).every((v) => v === undefined)) return toast("Bitte etwas eintragen");
     [name, args, ok] = ["gesundheit_erfassen", Object.fromEntries(Object.entries(a).filter(([, v]) => v !== undefined)), "Gespeichert ✓"];
   } else if (f.dataset.form === "frage") {
     if (!(d.antwort || "").trim()) return toast("Antwort fehlt");
