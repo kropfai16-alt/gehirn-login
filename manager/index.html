@@ -340,7 +340,14 @@ async function seiteGeld() {
       zeile("Spritpreis", tb.preis_schnitt_90_tage ? "Schnitt 90 Tage " + esc(tb.preis_schnitt_90_tage) : "", esc(tb.preis_zuletzt || "")) +
       tb.letzte.slice(0, 3).map((x) => zeile(esc(x.betrag), `${datum(x.am)} · ${String(x.liter).replace(".", ",")} l${x.ort ? " · " + esc(x.ort) : ""}`,
         x.verbrauch_l_100km ? String(x.verbrauch_l_100km).replace(".", ",") + " l" : "", "leise")).join(""));
-    const gruppen = { giro: "Giro", bargeld: "Bargeld", sparen: "Sparen", depot: "Depot", kredit: "Kredite" };
+    const pk = await werkzeug("cashflow_prognose", { tage: 35 }).catch(() => null);
+    if (pk && (pk.anweisungen || []).length) h += karte("👉 Jetzt zu tun", pk.anweisungen.map((x) => x.von
+      ? zeile(`${esc(x.von)} → ${esc(x.nach)}`, "umbuchen bis " + datum(x.bis), eur(x.betrag_cent), "warn")
+      : `<p class="hinweis">${esc(x.text)}</p>`).join(""));
+    if (pk && (pk.je_konto || []).length > 1) h += karte("Prognose 35 Tage je Konto", pk.je_konto.map((x) =>
+      zeile(esc(x.konto), x.kritisch_ab ? `<span class="warn">kritisch ab ${datum(x.kritisch_ab)}</span>` : "tiefster Stand " + datum(x.tiefster_am),
+        eur(x.tiefster_stand_cent), x.kritisch_ab ? "warn" : farbe(x.tiefster_stand_cent))).join(""));
+    const gruppen = { giro: "Giro", bargeld: "Bargeld", kreditkarte: "Kreditkarten", sparen: "Sparen", depot: "Depot", kredit: "Kredite" };
     h += karte("Gesamt", `<div class="gross ${farbe(k.gesamt_cent)}">${eur(k.gesamt_cent)}</div><p class="hinweis">Guthaben ${eur(k.guthaben_cent)} · Schulden ${eur(k.schulden_cent)}</p>`);
     for (const [art, name] of Object.entries(gruppen)) {
       const liste = k.konten.filter((x) => x.art === art);
@@ -407,11 +414,21 @@ async function seiteGeld() {
   } else {
     const k = await werkzeug("kredite_anzeigen");
     h += karte("Restschuld gesamt", `<div class="gross minus">${eur(-k.restschuld_gesamt_cent)}</div>`);
-    h += k.kredite.map((x) => karte(x.konto,
-      zeile("Restschuld", "", eur(-x.restschuld_cent), "minus") + zeile("Zins / Rate", "", `${String(x.zins_prozent).replace(".", ",")} % · ${eur(x.rate_cent)}`) +
-      zeile("Zinsen nächster Monat", "", eur(x.zins_naechster_monat_cent)) +
-      zeile("Abbezahlt", x.monate_bis_abbezahlt ? x.monate_bis_abbezahlt + " Monate" : "", x.abbezahlt_am ? datum(x.abbezahlt_am) : "–") +
-      zeile("Zinsen bis zum Ende", "", eur(x.zinsen_gesamt_cent)) + (x.sondertilgung_erlaubt ? `<span class="chip ok">Sondertilgung erlaubt</span>` : ""))).join("");
+    h += k.kredite.map((x) => karte(x.konto, x.art === "endfaellig"
+      ? zeile("Restschuld", "", eur(-x.restschuld_cent), "minus") +
+        zeile("Fällig auf einmal", x.faellig_geschaetzt ? '<span class="warn">nur geschätzt</span>' : "bestätigt", x.faellig_am ? datum(x.faellig_am) : "–")
+      : zeile("Restschuld", "", eur(-x.restschuld_cent), "minus") +
+        zeile("Zins / Rate", "", `${x.zins_prozent != null ? String(x.zins_prozent).replace(".", ",") + " %" : "Zins ?"} · ${x.rate_cent ? eur(x.rate_cent) : "Rate ?"}`) +
+        (x.zins_naechster_monat_cent != null ? zeile("Zinsen nächster Monat", "", eur(x.zins_naechster_monat_cent)) : "") +
+        zeile("Abbezahlt", x.monate_bis_abbezahlt ? x.monate_bis_abbezahlt + " Monate" : "", x.abbezahlt_am ? datum(x.abbezahlt_am) : "–") +
+        (x.zinsen_gesamt_cent ? zeile("Zinsen bis zum Ende", "", eur(x.zinsen_gesamt_cent)) : "") +
+        (x.sondertilgung_erlaubt ? `<span class="chip ok">Sondertilgung erlaubt</span>` : "") +
+      ((x.fehlt || []).length ? `<p class="hinweis">Fehlt noch: ${esc(x.fehlt.map((f) => ({ zins_prozent: "Zinssatz", rate_cent: "Rate", faellig_am: "Fälligkeit" })[f] || f).join(", "))} – im Chat nennen</p>` : ""))).join("");
+    const f = await werkzeug("faelligkeiten").catch(() => null);
+    if (f && f.offen.length) h += karte("Fällig ohne Rate", f.offen.map((x) =>
+      zeile(esc(x.name), datum(x.faellig_am) + (x.richtung === "forderung" ? " · bekommst du" : ""), eur(x.richtung === "forderung" ? x.betrag_cent : -x.betrag_cent, true),
+        x.richtung === "forderung" ? "plus" : "minus") + tun("bezahlt", "faelligkeiten", { name: x.name, faellig_am: x.faellig_am, erledigt: true },
+        `${x.name} (${eur(x.betrag_cent)}) erledigt?`)).join(""));
     if (k.ohne_konditionen.length) h += karte("Ohne Konditionen", k.ohne_konditionen.map((x) => zeile(esc(x.konto), "im Chat Zins und Rate nennen", eur(-x.restschuld_cent), "minus")).join(""));
   }
   return h;
