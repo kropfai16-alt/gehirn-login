@@ -230,6 +230,13 @@ async function seiteStart() {
   let h = "";
   if (f && f.neu.length) h += karte("Neu im Manager", f.neu.slice(0, 4).map((n) => zeile(esc(n.text), [n.bereich, n.beispiel ? "„" + n.beispiel + "“" : ""].filter(Boolean).map(esc).join(" · "), "")).join("") +
     zeile("Alles, was der Manager kann", "", "›", "leise", 'data-seite="faehig"'));
+  const mob = alles && alles.mobilitaet, anw = (alles && alles.anweisungen) || [];
+  const jetzt = [];
+  if (mob && mob.arbeitstag) jetzt.push(zeile(mob.eigene_wohnung ? "🚲 Rad zur Arbeit" : "🚗 Heute mit dem Auto",
+    mob.eigene_wohnung ? "bei schlechtem Wetter rechtzeitig Rufbus buchen" : `morgens ${esc(mob.morgens)}, abends ${esc(mob.abends)}`, ""));
+  for (const x of anw) jetzt.push(x.von ? zeile(`👉 ${esc(x.von)} → ${esc(x.nach)}`, "umbuchen bis " + datum(x.bis), eur(x.betrag_cent), "warn")
+    : `<p class="hinweis">👉 ${esc(x.text)}</p>`);
+  if (jetzt.length) h += karte("Heute wichtig", jetzt.join(""));
   h += `<div class="karte" style="padding:4px 14px">${zeile("📅 Woche im Überblick", "Wetter, Termine, Essen, Sport", "›", "leise", 'data-seite="woche"')}</div>`;
   if ((u.erinnerungen || []).length) h += karte("Erinnerungen", u.erinnerungen.map((e) => zeile("⏰ " + esc(e.text),
     `${e.wochentag} ${e.faellig_am.slice(8, 10)}.${e.faellig_am.slice(5, 7)}. ${e.faellig_am.slice(11)}` + (e.wiederholung ? " · " + esc(e.wiederholung) : ""),
