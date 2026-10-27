@@ -1,5 +1,5 @@
 // Startet die App auch ohne Netz (zeigt dann die zuletzt geladene Oberfläche); Daten kommen immer frisch vom Server.
-const CACHE = "manager-v42";
+const CACHE = "manager-v43";
 const SCHALE = ["./", "index.html", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png"];
 self.addEventListener("install", (e) => e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SCHALE)).then(() => self.skipWaiting())));
 self.addEventListener("activate", (e) => e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k))))

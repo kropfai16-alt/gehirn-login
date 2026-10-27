@@ -347,6 +347,18 @@ async function seiteGeld() {
     if (pk && (pk.je_konto || []).length > 1) h += karte("Prognose 35 Tage je Konto", pk.je_konto.map((x) =>
       zeile(esc(x.konto), x.kritisch_ab ? `<span class="warn">kritisch ab ${datum(x.kritisch_ab)}</span>` : "tiefster Stand " + datum(x.tiefster_am),
         eur(x.tiefster_stand_cent), x.kritisch_ab ? "warn" : farbe(x.tiefster_stand_cent))).join(""));
+    const vl = await werkzeug("vermoegen_verlauf", { monate: 12 }).catch(() => null);
+    if (vl && vl.monate.length >= 2) {
+      const max = Math.max(...vl.monate.map((x) => Math.abs(x.netto_cent)), 1);
+      const mn = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+      h += karte("Vermögen (netto) je Monat", `<div style="display:flex;align-items:flex-end;gap:4px;height:90px;margin:6px 0">` +
+        vl.monate.map((x) => `<div title="${esc(x.monat)}: ${eur(x.netto_cent)}" style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%">` +
+          `<div style="height:${Math.max(4, Math.round(80 * Math.abs(x.netto_cent) / max))}px;border-radius:4px;background:${x.netto_cent >= 0 ? "var(--plus, #4ade80)" : "var(--minus, #f87171)"}"></div>` +
+          `<div class="hinweis" style="text-align:center;font-size:10px">${mn[Number(x.monat.slice(5, 7)) - 1]}</div></div>`).join("") + `</div>` +
+        (() => { const l = vl.monate[vl.monate.length - 1], v = vl.monate[vl.monate.length - 2];
+          return zeile("Netto jetzt", "Vormonat " + eur(v.netto_cent), eur(l.netto_cent), farbe(l.netto_cent)) +
+            (l.sparquote_prozent != null ? zeile("Sparquote diesen Monat", `Einnahmen ${eur(l.einnahmen_cent)} · Ausgaben ${eur(l.ausgaben_cent)}`, l.sparquote_prozent + " %", l.sparquote_prozent >= 0 ? "plus" : "minus") : ""); })());
+    }
     const gruppen = { giro: "Giro", bargeld: "Bargeld", kreditkarte: "Kreditkarten", sparen: "Sparen", depot: "Depot", kredit: "Kredite" };
     h += karte("Gesamt", `<div class="gross ${farbe(k.gesamt_cent)}">${eur(k.gesamt_cent)}</div><p class="hinweis">Guthaben ${eur(k.guthaben_cent)} · Schulden ${eur(k.schulden_cent)}</p>`);
     for (const [art, name] of Object.entries(gruppen)) {
