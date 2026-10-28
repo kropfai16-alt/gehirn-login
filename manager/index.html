@@ -255,9 +255,10 @@ async function seiteStart() {
   if (nachrichten.length) h += karte("📬 Nachrichten", nachrichten.slice(0, 4).map((n) =>
     `<div style="margin:0 0 10px"><b>${esc(n.titel)}</b>${n.neu ? ' <span class="chip w">neu</span>' : ""} <span class="hinweis">${esc(n.zeit)}</span>` +
     `<div style="white-space:pre-line;margin-top:2px">${esc(n.text)}</div></div>`).join(""));
-  if (u.einrichtung && u.einrichtung.naechster) h += karte(`🧭 Einrichten · ${esc(u.einrichtung.fortschritt)}`,
-    `<p style="margin:0 0 4px"><b>${esc(u.einrichtung.naechster.titel)}</b></p><p class="hinweis" style="margin:0">${esc(u.einrichtung.naechster.warum)} ` +
-    `Sag im Manager-Chat einfach „Lass uns das einrichten“.</p>`);
+  if (u.einrichtung && (u.einrichtung.naechster || (u.einrichtung.fahrplan || []).length)) h += karte(`🧭 Einrichten · ${esc(u.einrichtung.fortschritt)}`,
+    (u.einrichtung.naechster ? `<p style="margin:0 0 4px"><b>Heute: ${esc(u.einrichtung.naechster.titel)}</b></p><p class="hinweis" style="margin:0 0 6px">${esc(u.einrichtung.naechster.warum)} ` +
+    `Sag im Manager-Chat einfach „Lass uns das einrichten“.</p>` : "") +
+    (u.einrichtung.fahrplan || []).filter((x) => !x.faellig).map((x) => `<p class="hinweis" style="margin:0">${esc(x.am)} · ${esc(x.titel)}</p>`).join(""));
   if ((u.check_in || []).length) h += karte("💬 Check-in", u.check_in.slice(0, 3).map((x) => `<p style="margin:0 0 6px">${esc(x.frage)}</p>`).join("") +
     `<p class="hinweis">Einfach im Manager-Chat erzählen – oder unten antippen.</p>`);
   h += karte("Wie geht's dir heute?", `<div style="display:flex;justify-content:space-between">` +
