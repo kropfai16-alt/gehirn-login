@@ -227,6 +227,7 @@ async function seiteStart() {
       werkzeug("gewohnheiten_anzeigen").catch(() => null)]);
   const a = u.ausgaben_budgetmonat || {};
   const [von, bis] = (a.zeitraum || "").split(" bis ");
+  const topf = Object.fromEntries(((alles && alles.toepfe) || []).map((t) => [t.kategorie, t]));
   let h = "";
   if (f && f.neu.length) h += karte("Neu im Manager", f.neu.slice(0, 4).map((n) => zeile(esc(n.text), [n.bereich, n.beispiel ? "„" + n.beispiel + "“" : ""].filter(Boolean).map(esc).join(" · "), "")).join("") +
     zeile("Alles, was der Manager kann", "", "›", "leise", 'data-seite="faehig"'));
@@ -272,16 +273,17 @@ async function seiteStart() {
   if (anst.length) h += karte("Steht an", anst.map((a) => zeile(esc(a), "im Chat erledigen", "")).join(""));
   h += karte(`Budgetmonat ${datum(von).slice(0, 6)} – ${datum(bis).slice(0, 6)}`,
     `<div class="gross minus">${eur(-(a.summe_cent || 0))}</div><p class="hinweis">ausgegeben · Einnahmen ${eur(a.einnahmen_cent || 0)}</p>` +
-    Object.entries(a.kategorien || {}).sort((x, y) => y[1] - x[1]).map(([k, v]) => {
-      const bud = (a.budgets || {})[k];
-      if (bud) {
-        const pz = Math.round(100 * v / bud), f = pz >= 100 ? "var(--rot)" : pz >= 90 ? "var(--gelb)" : "";
+    Object.entries(Object.assign(Object.fromEntries(Object.keys(topf).map((k) => [k, 0])), a.kategorien || {})).sort((x, y) => y[1] - x[1]).map(([k, v]) => {
+      const t = topf[k], bud = t ? t.verfuegbar_cent : (a.budgets || {})[k];
+      if (bud !== undefined) {
+        const pz = Math.round(100 * v / Math.max(bud, 1)), f = pz >= 100 ? "var(--rot)" : pz >= 90 ? "var(--gelb)" : "";
         return `<div class="zeile"><div class="l">${esc(k)}<div class="balken"><i style="width:${Math.min(100, pz)}%${f ? ";background:" + f : ""}"></i></div>` +
-          `<div class="hinweis">${pz >= 100 ? "über Budget" : "noch " + eur(bud - v)} von ${eur(bud)}</div></div><div class="r">${eur(v)}</div></div>`;
+          `<div class="hinweis">${pz >= 100 ? "Topf leer – nur noch Dringendes" : "noch " + eur(bud - v)} von ${eur(bud)}` +
+          `${t && t.uebertrag_cent ? " (−" + eur(t.uebertrag_cent) + " aus Vormonat)" : ""}</div></div><div class="r">${eur(v)}</div></div>`;
       }
       const pz = a.summe_cent ? Math.max(0, Math.round(100 * v / a.summe_cent)) : 0;
       return `<div class="zeile"><div class="l">${esc(k)}<div class="balken"><i style="width:${pz}%"></i></div></div><div class="r">${eur(v)}</div></div>`;
-    }).join("") + (a.budgets ? "" : zeile("Budgets pro Kategorie festlegen", "im Chat: „Für Essen gehen höchstens 150 € im Monat“", "", "leise")));
+    }).join("") + (a.budgets ? "" : zeile("Geld auf Töpfe verteilen", "im Chat: „Verteil mein Geld für diesen Monat“", "", "leise")));
   if ((u.erwartete_buchungen || []).length) {
     h += karte("Erwartet", u.erwartete_buchungen.map((e) =>
       zeile(esc(e.auftrag), `${tagkurz(e.termin)} · ${esc(e.konto)}${e.nach ? " → " + esc(e.nach) : ""}${e.ueberfaellig ? ' · <span class="warn">überfällig</span>' : ""}`,
