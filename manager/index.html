@@ -598,11 +598,11 @@ async function seiteIch() {
       zeile((ICON[x.art] || "•") + " " + esc(x.text), datum(x.am) + (x.personen ? " · " + esc(x.personen.join(", ")) : ""), "")).join("")
       : `<p class="hinweis">Erzähl im Chat einfach, was du gemacht hast – z. B. „Heute Steuer erledigt, war stressig“.</p>`) +
     (tb.vorhaben.length ? `<p class="hinweis" style="margin:8px 0 2px">Vorhaben</p>` + tb.vorhaben.map((x) => zeile("🗓️ " + esc(x.text), datum(x.am), "")).join("") : ""));
-  h += karte("Fristen & Dokumente", fx.length ? fx.map((x) => zeile(esc(x.name) + (x.bald ? ' <span class="chip w">bald</span>' : ""),
+  h += karte("Fristen", fx.length ? fx.map((x) => zeile(esc(x.name) + (x.bald ? ' <span class="chip w">bald</span>' : ""),
       `${datum(x.ablauf)}${x.wiederholung_monate ? " · alle " + x.wiederholung_monate + " Monate" : ""}`,
       x.tage_bis < 0 ? "abgelaufen" : x.tage_bis + " T.", x.tage_bis < 0 ? "minus" : x.bald ? "warn" : "leise") +
       (x.wiederholung_monate ? tun("erneuert", "frist_speichern", { name: x.name, erneuert: true }, `${x.name} erneuert?`, "leise") : "")).join("")
-    : `<p class="hinweis">Noch nichts eingetragen – im Chat: „Mein Reisepass läuft im März 2027 ab“</p>`);
+    : `<p class="hinweis">Noch nichts eingetragen – im Chat: „TÜV fürs Auto ist im Mai fällig“</p>`);
   if (fr.beantwortet.length) h += karte("Was ich über dich weiß", fr.beantwortet.map((x) => zeile(esc(x.antwort), esc(x.frage), "")).join(""));
   if (fr.offen.length) h += karte("Offene Fragen", `<p class="hinweis">${fr.offen.length} Fragen warten – im Chat: „Stell mir ein paar Fragen“</p>`);
   return h;
