@@ -358,9 +358,10 @@ async function seiteGeld() {
       tb.letzte.slice(0, 3).map((x) => zeile(esc(x.betrag), `${datum(x.am)} · ${String(x.liter).replace(".", ",")} l${x.ort ? " · " + esc(x.ort) : ""}`,
         x.verbrauch_l_100km ? String(x.verbrauch_l_100km).replace(".", ",") + " l" : "", "leise")).join(""));
     const pk = await werkzeug("cashflow_prognose", { tage: 35 }).catch(() => null);
-    if (pk && (pk.anweisungen || []).length) h += karte("👉 Jetzt zu tun", pk.anweisungen.map((x) => x.von
-      ? zeile(`${esc(x.von)} → ${esc(x.nach)}`, "umbuchen bis " + datum(x.bis), eur(x.betrag_cent), "warn")
-      : `<p class="hinweis">${esc(x.text)}</p>`).join(""));
+    if (pk && ((pk.anweisungen || []).length || (pk.dauerauftrag_vorschlaege || []).length)) h += karte("👉 Jetzt zu tun", (pk.anweisungen || []).map((x) => x.von
+      ? zeile(`${esc(x.von)} → ${esc(x.nach)}`, x.am ? "umbuchen am " + datum(x.am) + " (nach dem Geldeingang)" : "umbuchen bis " + datum(x.bis), eur(x.betrag_cent), "warn")
+      : `<p class="hinweis">${esc(x.text)}</p>`).join("") +
+      (pk.dauerauftrag_vorschlaege || []).map((v) => zeile(`Dauerauftrag ${esc(v.von)} → ${esc(v.nach)}`, `monatlich am ${esc(v.tag)}. – im Chat anlegen lassen`, eur(v.betrag_cent))).join(""));
     if (pk && (pk.je_konto || []).length > 1) h += karte("Prognose 35 Tage je Konto", pk.je_konto.map((x) =>
       zeile(esc(x.konto), x.kritisch_ab ? `<span class="warn">kritisch ab ${datum(x.kritisch_ab)}</span>` : "tiefster Stand " + datum(x.tiefster_am),
         eur(x.tiefster_stand_cent), x.kritisch_ab ? "warn" : farbe(x.tiefster_stand_cent))).join(""));
