@@ -206,7 +206,7 @@ async function zeigen() {
   const ziel = $("#inhalt");
   ziel.classList.add("laden");
   try {
-    ziel.innerHTML = await ({ start: seiteStart, geld: seiteGeld, kueche: seiteKueche, filme: seiteFilme, rezept: seiteRezept, faehig: seiteFaehig, sport: seiteSport, leute: seiteLeute, urlaub: seiteUrlaub, ich: seiteIch, woche: seiteWoche }[seite] || seiteStart)();
+    ziel.innerHTML = await ({ start: seiteStart, geld: seiteGeld, kueche: seiteKueche, filme: seiteFilme, rezept: seiteRezept, faehig: seiteFaehig, sport: seiteSport, leute: seiteLeute, urlaub: seiteUrlaub, ich: seiteIch, woche: seiteWoche, kleider: seiteKleider }[seite] || seiteStart)();
   } catch (e) {
     if (e.message === "ANMELDEN") return zeigeLogin();
     ziel.innerHTML = karte("", `<p class="fehler">${esc(e.message)}</p><button class="knopf" onclick="zeigen()">Nochmal</button>`);
@@ -564,6 +564,73 @@ async function seiteWoche() {
   return h + `<p class="hinweis">Lücken füllen im Chat: „Plan meine Woche“</p>`;
 }
 
+const KLEID_NAMEN = { jacke: "Jacken", pulli: "Pullis", oberteil: "Oberteile", hose: "Hosen", schuhe: "Schuhe", kleid: "Kleider", sport: "Sport", accessoire: "Accessoires" };
+const bildKachel = (t, gross = 56) => t.vorschau
+  ? `<img src="${esc(t.vorschau)}" alt="" data-bild="${esc(t.id)}" style="width:${gross}px;height:${gross}px;object-fit:cover;border-radius:10px;flex:none">`
+  : `<div style="width:${gross}px;height:${gross}px;border-radius:10px;flex:none;display:flex;align-items:center;justify-content:center;background:rgba(127,127,127,.15)">👕</div>`;
+async function seiteKleider() {
+  $("#titel").textContent = "Kleiderschrank";
+  const [s, o] = await Promise.all([werkzeug("kleiderschrank_app"), werkzeug("outfit_vorschlagen", {}).catch(() => null)]);
+  const nachId = Object.fromEntries(s.teile.map((t) => [t.id, t]));
+  let h = `<p><a href="#ich" style="color:var(--akzent)">‹ Zurück</a></p>`;
+  if (o && (o.teile || []).length) h += karte("👕 Heute anziehen", `<p class="hinweis" style="margin-top:0">${esc(o.wetter || "")}${o.grund ? " · " + esc(o.grund) : ""}</p>` +
+    `<div style="display:flex;gap:10px;flex-wrap:wrap">` + o.teile.map((t) => `<div style="width:76px;text-align:center">${bildKachel(nachId[t.id] || t, 76)}` +
+      `<div class="hinweis" style="margin-top:4px">${esc(t.name)}</div></div>`).join("") + `</div>` +
+    `<p class="hinweis">Passt gut zusammen oder gar nicht? Sag es im Manager-Chat – ich lerne daraus.</p>`);
+  if (s.ohne_foto) h += `<p class="hinweis">${s.ohne_foto} Teil(e) ohne Foto – tipp auf 📷, um eins aufzunehmen.</p>`;
+  const gruppen = {};
+  for (const t of s.teile) (gruppen[t.kategorie] ||= []).push(t);
+  for (const [k, liste] of Object.entries(gruppen)) {
+    h += karte(KLEID_NAMEN[k] || k, liste.map((t) => `<div class="zeile" style="align-items:center;gap:10px">${bildKachel(t)}` +
+      `<div class="l">${esc(t.name)}<div class="hinweis">${[t.farbe, t.status === "verkauf" ? "im Verkauf" : t.status === "waesche" ? "in der Wäsche" : ""].filter(Boolean).map(esc).join(" · ")}</div></div>` +
+      `<label class="mini" style="cursor:pointer">📷<input type="file" accept="image/*" capture="environment" data-foto="${esc(t.id)}" style="display:none"></label></div>`).join(""));
+  }
+  if (!s.teile.length) h += karte("", `<p class="hinweis">Noch keine Kleidung erfasst – schick im Manager-Chat ein Foto deines Schranks oder einzelner Teile.</p>`);
+  return h;
+}
+// Foto verkleinern (längste Seite max px) und als JPEG-Daten-URL liefern
+function verkleinern(datei, max, qualitaet) {
+  return new Promise((fertig, fehler) => {
+    const img = new Image();
+    img.onload = () => {
+      const f = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * f); c.height = Math.round(img.height * f);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src);
+      fertig(c.toDataURL("image/jpeg", qualitaet));
+    };
+    img.onerror = fehler;
+    img.src = URL.createObjectURL(datei);
+  });
+}
+document.addEventListener("click", async (ev) => {
+  const id = ev.target.dataset && ev.target.dataset.bild;
+  if (!id) return;
+  try {
+    const r = await werkzeug("kleidung_foto", { id });
+    if (!r.bild) return;
+    const o = document.createElement("div");
+    o.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:50";
+    o.innerHTML = `<img src="${esc(r.bild)}" alt="" style="max-width:94vw;max-height:88vh;border-radius:12px">`;
+    o.onclick = () => o.remove();
+    document.body.appendChild(o);
+  } catch (e) { toast(e.message); }
+});
+document.addEventListener("change", async (ev) => {
+  const id = ev.target.dataset && ev.target.dataset.foto;
+  if (!id || !ev.target.files || !ev.target.files[0]) return;
+  try {
+    toast("Foto wird gespeichert …");
+    const datei = ev.target.files[0];
+    const [vorschau, bild] = await Promise.all([verkleinern(datei, 160, 0.7), verkleinern(datei, 700, 0.75)]);
+    await werkzeug("kleidung_foto", { id, vorschau, bild });
+    toast("Foto gespeichert");
+    await zeigen();
+  } catch (e) {
+    toast("Foto nicht gespeichert: " + e.message);
+  }
+});
 async function seiteIch() {
   $("#titel").textContent = "Ich";
   const [g, fr, fx, tb] = await Promise.all([werkzeug("gesundheit_anzeigen"), werkzeug("fragen_anzeigen"), werkzeug("fristen_anzeigen").catch(() => []),
@@ -571,6 +638,7 @@ async function seiteIch() {
   const sterne = (n, feld, icons) => `<div style="display:flex;justify-content:space-between">` +
     icons.map((e, i) => tun(`<span style="font-size:22px">${e}</span>`, "gesundheit_erfassen", { [feld]: i + 1 })).join("") + `</div>`;
   let h = `<p><a href="#start" style="color:var(--akzent)">‹ Zurück</a></p>`;
+  h += `<div class="karte" style="padding:4px 14px">${zeile("👕 Kleiderschrank", "Fotos, Outfit für heute", "›", "leise", 'data-seite="kleider"')}</div>`;
   h += karte("Heute", `<p class="hinweis">Stimmung</p>` + sterne(0, "stimmung", ["😫", "😕", "😐", "🙂", "😄"]) +
     `<p class="hinweis">Energie</p>` + sterne(0, "energie", ["🪫", "😴", "😐", "⚡", "🚀"]) +
     `<p class="hinweis">Schlafqualität</p>` + sterne(0, "schlaf_qualitaet", ["😵", "🥱", "😐", "😌", "😴"]) +
