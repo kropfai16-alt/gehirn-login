@@ -206,7 +206,7 @@ async function zeigen() {
   const ziel = $("#inhalt");
   ziel.classList.add("laden");
   try {
-    ziel.innerHTML = await ({ start: seiteStart, geld: seiteGeld, kueche: seiteKueche, filme: seiteFilme, rezept: seiteRezept, faehig: seiteFaehig, sport: seiteSport, leute: seiteLeute, urlaub: seiteUrlaub, ich: seiteIch, woche: seiteWoche, kleider: seiteKleider }[seite] || seiteStart)();
+    ziel.innerHTML = await ({ start: seiteStart, geld: seiteGeld, kueche: seiteKueche, filme: seiteFilme, rezept: seiteRezept, faehig: seiteFaehig, sport: seiteSport, leute: seiteLeute, urlaub: seiteUrlaub, ich: seiteIch, woche: seiteWoche, kleider: seiteKleider, mitbringsel: seiteMitbringsel }[seite] || seiteStart)();
   } catch (e) {
     if (e.message === "ANMELDEN") return zeigeLogin();
     ziel.innerHTML = karte("", `<p class="fehler">${esc(e.message)}</p><button class="knopf" onclick="zeigen()">Nochmal</button>`);
@@ -588,6 +588,32 @@ async function seiteKleider() {
   if (!s.teile.length) h += karte("", `<p class="hinweis">Noch keine Kleidung erfasst – schick im Manager-Chat ein Foto deines Schranks oder einzelner Teile.</p>`);
   return h;
 }
+async function seiteMitbringsel() {
+  $("#titel").textContent = "Mitbringsel";
+  const s = await werkzeug("mitbringsel_app");
+  let h = `<p><a href="#urlaub" style="color:var(--akzent)">‹ Zurück</a></p>`;
+  if (s.hinweis) h += `<p class="hinweis">${esc(s.hinweis)}</p>`;
+  if (s.besitz.length) {
+    h += karte(`Meine Mitbringsel · ${s.besitz.length}`, `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px">` +
+      s.besitz.map((m) => `<div style="text-align:center">` +
+        (m.vorschau
+          ? `<img src="${esc(m.vorschau)}" alt="" data-mbild="${esc(m.id)}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:12px">`
+          : `<label style="cursor:pointer;display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:1;border-radius:12px;background:rgba(127,127,127,.15);font-size:30px">📷` +
+            `<input type="file" accept="image/*" capture="environment" data-mfoto="${esc(m.id)}" style="display:none"></label>`) +
+        `<div style="margin-top:6px;font-weight:600">${esc(m.gegenstand)}</div>` +
+        `<div class="hinweis" style="margin-top:2px">${esc([m.ort || m.land || m.reise, m.jahr].filter(Boolean).join(" · ") || "Ort fehlt")}</div>` +
+        (m.beschreibung ? `<div class="hinweis" style="margin-top:2px">${esc(m.beschreibung)}</div>` : "") +
+        (m.vorschau ? `<label class="mini" style="cursor:pointer">📷 neu<input type="file" accept="image/*" capture="environment" data-mfoto="${esc(m.id)}" style="display:none"></label>` : "") +
+        `</div>`).join("") + `</div>`);
+  } else {
+    h += karte("", `<p class="hinweis">Noch keine Mitbringsel – erzähl dem Manager im Chat, was du hast: „Ich habe eine Tasse aus Madrid und einen Löffel aus Prag“. Danach hier je Gegenstand auf 📷 tippen.</p>`);
+  }
+  h += karte("Wunschliste", s.wunschliste.length
+    ? s.wunschliste.map((w) => zeile(esc(w.gegenstand), esc([w.ort, w.beschreibung].filter(Boolean).join(" · ")), "🎯", "leise")).join("")
+    : `<p class="hinweis">Noch leer – im Chat: „Auf meine Mitbringsel-Wunschliste: Geschirrtuch, Flaschenöffner“</p>`);
+  if (s.je_art) h += `<p class="hinweis">${Object.entries(s.je_art).map(([k, n]) => `${n} × ${esc(k)}`).join(" · ")}</p>`;
+  return h;
+}
 // Foto verkleinern (längste Seite max px) und als JPEG-Daten-URL liefern
 function verkleinern(datei, max, qualitaet) {
   return new Promise((fertig, fehler) => {
@@ -605,10 +631,11 @@ function verkleinern(datei, max, qualitaet) {
   });
 }
 document.addEventListener("click", async (ev) => {
-  const id = ev.target.dataset && ev.target.dataset.bild;
+  const d = ev.target.dataset || {};
+  const id = d.bild || d.mbild;
   if (!id) return;
   try {
-    const r = await werkzeug("kleidung_foto", { id });
+    const r = await werkzeug(d.mbild ? "mitbringsel_foto" : "kleidung_foto", { id });
     if (!r.bild) return;
     const o = document.createElement("div");
     o.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:50";
@@ -618,13 +645,14 @@ document.addEventListener("click", async (ev) => {
   } catch (e) { toast(e.message); }
 });
 document.addEventListener("change", async (ev) => {
-  const id = ev.target.dataset && ev.target.dataset.foto;
+  const d = ev.target.dataset || {};
+  const id = d.foto || d.mfoto;
   if (!id || !ev.target.files || !ev.target.files[0]) return;
   try {
     toast("Foto wird gespeichert …");
     const datei = ev.target.files[0];
-    const [vorschau, bild] = await Promise.all([verkleinern(datei, 160, 0.7), verkleinern(datei, 700, 0.75)]);
-    await werkzeug("kleidung_foto", { id, vorschau, bild });
+    const [vorschau, bild] = await Promise.all([verkleinern(datei, d.mfoto ? 240 : 160, 0.7), verkleinern(datei, 700, 0.75)]);
+    await werkzeug(d.mfoto ? "mitbringsel_foto" : "kleidung_foto", { id, vorschau, bild });
     toast("Foto gespeichert");
     await zeigen();
   } catch (e) {
@@ -685,6 +713,7 @@ async function seiteUrlaub() {
   const uk = kalJahr === u.jahr ? u : await werkzeug("urlaub_anzeigen", { jahr: kalJahr });
   const zahl = (x) => String(x).replace(".", ",");
   let h = `<p><a href="#start" style="color:var(--akzent)">‹ Zurück</a></p>`;
+  h += `<div class="karte" style="padding:4px 14px">${zeile("🎁 Mitbringsel", "Was dich an welche Reise erinnert, Wunschliste", "›", "leise", 'data-seite="mitbringsel"')}</div>`;
   h += karte(`Urlaub ${u.jahr}`, `<div class="gross ${u.noch_frei > 0 ? "plus" : ""}">${zahl(u.noch_frei)} Tage frei</div>` +
     `<p class="hinweis">Anspruch ${zahl(u.anspruch)} · genommen ${zahl(u.genommen)} · geplant ${zahl(u.geplant)}</p>` +
     (u.rest_verfaellt ? `<p class="warn">${zahl(u.rest_verfaellt.tage)} Tage Resturlaub verfallen am ${datum(u.rest_verfaellt.am)}</p>` : ""));
