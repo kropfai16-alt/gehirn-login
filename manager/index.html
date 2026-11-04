@@ -592,6 +592,7 @@ async function seiteMitbringsel() {
   $("#titel").textContent = "Mitbringsel";
   const s = await werkzeug("mitbringsel_app");
   let h = `<p><a href="#urlaub" style="color:var(--akzent)">‹ Zurück</a></p>`;
+  if (s.fehlt) h += `<p class="hinweis">${esc(s.fehlt)}</p>`;
   if (s.hinweis) h += `<p class="hinweis">${esc(s.hinweis)}</p>`;
   if (s.besitz.length) {
     h += karte(`Meine Mitbringsel · ${s.besitz.length}`, `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px">` +
@@ -611,7 +612,10 @@ async function seiteMitbringsel() {
   h += karte("Wunschliste", s.wunschliste.length
     ? s.wunschliste.map((w) => zeile(esc(w.gegenstand), esc([w.ort, w.beschreibung].filter(Boolean).join(" · ")), "🎯", "leise")).join("")
     : `<p class="hinweis">Noch leer – im Chat: „Auf meine Mitbringsel-Wunschliste: Geschirrtuch, Flaschenöffner“</p>`);
-  if (s.je_art) h += `<p class="hinweis">${Object.entries(s.je_art).map(([k, n]) => `${n} × ${esc(k)}`).join(" · ")}</p>`;
+  if ((s.rubriken || []).length) h += karte("Rubriken", s.rubriken.map((r) => zeile(esc(r.name),
+    [r.min !== undefined ? "mind. " + r.min : "", r.max !== undefined ? "höchstens " + r.max : ""].filter(Boolean).join(" · ") || "keine Vorgabe",
+    `${r.anzahl}${r.stand === "fehlt" ? " ⬆️" : r.stand === "voll" ? " ✋" : ""}`, r.stand === "fehlt" ? "warn" : "leise")).join("") +
+    `<p class="hinweis">Mindest-/Höchstbestand im Chat ändern: „Tassen höchstens 10“</p>`);
   return h;
 }
 // Foto verkleinern (längste Seite max px) und als JPEG-Daten-URL liefern
