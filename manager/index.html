@@ -345,6 +345,13 @@ async function seiteGeld() {
       `<input name="kategorie" list="kats" placeholder="Kategorie" style="flex:1 1 40%"><datalist id="kats">${kats.map((x) => `<option value="${esc(x.kategorie)}">`).join("")}</datalist>` +
       `<select name="konto" style="flex:1 1 40%">${k.konten.filter((x) => x.art === "giro" || x.art === "bargeld").map((x) => `<option>${esc(x.konto)}</option>`).join("")}</select>` +
       `<button class="mini" style="flex:1 1 100%">Buchen</button></form>`);
+    const giro = k.konten;   // alle Konten (Giro, Bargeld, Sparen, Kredite für Sondertilgungen)
+    h += karte("Umbuchen", `<form class="formular" data-form="umbuchen">` +
+      `<select name="von" style="flex:1 1 45%">${giro.map((x) => `<option>${esc(x.konto)}</option>`).join("")}</select>` +
+      `<select name="nach" style="flex:1 1 45%">${giro.map((x, i) => `<option${i === 1 ? " selected" : ""}>${esc(x.konto)}</option>`).join("")}</select>` +
+      `<input name="betrag" inputmode="decimal" placeholder="Betrag €" required style="flex:1 1 45%">` +
+      `<input name="notiz" placeholder="Notiz (optional)" style="flex:1 1 45%">` +
+      `<button class="mini" style="flex:1 1 100%">Umbuchen</button></form>`);
     const sz = await werkzeug("sparziele_anzeigen").catch(() => null);
     if (sz && sz.aktiv.length) h += karte("Sparziele", sz.aktiv.map((z) =>
       `<div class="zeile"><div class="l">${esc(z.name)}<div class="balken"><i style="width:${z.prozent}%"></i></div>` +
@@ -482,12 +489,19 @@ async function seiteKueche() {
         `<button class="${g === filter ? "an" : ""}" data-laden="${esc(g)}">${esc(txt)}</button>`).join("") + `</div>`;
     const zeileE = (e) => zeile(esc(e.text) + (e.eilig ? ' <span class="chip w">eilig</span>' : "") +
         (e.warnungen ? ' <span class="chip w">⚠ ' + esc(e.warnungen.map((w) => w.gegenstand).join(", ")) + "</span>" : ""),
-      [e.eilig ? e.geschaeft : "", e.notiz, e.im_vorrat ? "da: " + e.im_vorrat : ""].filter(Boolean).map(esc).join(" · "),
+      [e.eilig ? e.geschaeft : "", e.notiz, e.im_vorrat ? "da: " + e.im_vorrat : "", e.angebot ? "🏷 " + e.angebot : ""].filter(Boolean).map(esc).join(" · "),
       menge(e.menge, e.einheit) + tun(e.eilig ? "⏳" : "⚡", "einkauf_aendern", { ids: [e.id], eilig: !e.eilig }, "", "leise") + tun("✓", "einkauf_abhaken", { ids: [e.id] }));
     const eilig = offen.filter((e) => e.eilig);
     if (eilig.length) h += karte(`⚡ Eilig (${eilig.length})`, eilig.map(zeileE).join(""));
+    // Lebensmittel nach Abteilung (Obst & Gemüse, Kühlregal …), andere Geschäfte (Drogerie, Hagebau …) als eigene Gruppe
+    const REIHE = ["Obst & Gemüse", "Brot & Backwaren", "Kühlregal", "Fleisch & Fisch", "Tiefkühl", "Trockenware & Konserven",
+                   "Gewürze, Öl & Soßen", "Süßes & Snacks", "Getränke", "Drogerie", "Haushalt", "Sonstiges"];
     const gruppen = {};
-    for (const e of offen.filter((e) => !e.eilig)) (gruppen[e.geschaeft || "Lebensmittel"] ||= []).push(e);
+    for (const e of offen.filter((e) => !e.eilig)) (gruppen[e.abteilung || e.geschaeft || "Sonstiges"] ||= []).push(e);
+    const sortiert = Object.fromEntries(Object.entries(gruppen).sort(([a], [b]) =>
+      (REIHE.indexOf(a) < 0 ? 99 : REIHE.indexOf(a)) - (REIHE.indexOf(b) < 0 ? 99 : REIHE.indexOf(b))));
+    for (const k of Object.keys(gruppen)) delete gruppen[k];
+    Object.assign(gruppen, sortiert);
     h += Object.keys(gruppen).length ? Object.entries(gruppen).map(([g, liste]) => karte(`${g} (${liste.length})`, liste.map(zeileE).join(""))).join("")
       : eilig.length ? "" : leer("Einkaufsliste ist leer");
     if ((l.vielleicht_auch || []).length) h += karte("Vielleicht auch", l.vielleicht_auch.map((x) =>
@@ -496,9 +510,17 @@ async function seiteKueche() {
     if ((l.zuletzt_erledigt || []).length) h += karte("Zuletzt gekauft", l.zuletzt_erledigt.slice(0, 8).map((e) => zeile(`<span class="leise">${esc(e.text)}</span>`, datum(e.am) + (e.per_bon ? " · per Bon" : ""), "✓", "plus")).join(""));
   } else if (t === "vorrat") {
     const v = await werkzeug("vorrat_anzeigen", { filter: "alle" });
+    h += karte("Dazu (von Hand)", `<form class="formular" data-form="vorrat"><input name="produkt" placeholder="Produkt (z. B. Eier)" autocomplete="off" required style="flex:1 1 100%">` +
+      `<input name="menge" inputmode="decimal" placeholder="Menge" required style="flex:1 1 30%">` +
+      `<select name="einheit" style="flex:1 1 30%">${["stk", "g", "kg", "ml", "l", "packung", "dose", "flasche", "glas"].map((x) => `<option>${x}</option>`).join("")}</select>` +
+      `<button class="mini" style="flex:1 1 30%">Dazu</button></form>`);
+    h += `<div class="formular" style="margin:0 0 10px"><input data-suche="vorrat" placeholder="🔍 Im Vorrat suchen (Produkt oder Fach)" autocomplete="off" style="flex:1 1 100%"></div>`;
     h += v.length ? karte(`${v.length} Produkte`, v.map((x) =>
-      zeile(esc(x.produkt), (x.stand === "wahrscheinlich" ? "wahrscheinlich da" : "bestätigt") + (x.mhd ? " · MHD " + datum(x.mhd) : ""), menge(x.menge, x.einheit),
-        x.tage_bis_mhd !== null && x.tage_bis_mhd <= 2 ? "warn" : "")).join("")) : leer("Kein Vorrat erfasst – Kassenbon im Chat schicken");
+      `<div data-finde="${esc((x.produkt + " " + (x.lagerort || "")).toLowerCase())}">` +
+      zeile(esc(x.produkt), [x.stand === "wahrscheinlich" ? "wahrscheinlich da" : "bestätigt", x.lagerort, x.mhd ? "MHD " + datum(x.mhd) : "",
+          x.offen_seit_tagen ? "offen seit " + x.offen_seit_tagen + " T." : ""].filter(Boolean).map(esc).join(" · "),
+        x.gebinde ? esc(x.gebinde.replace(".", ",")) : menge(x.menge, x.einheit), x.tage_bis_mhd !== null && x.tage_bis_mhd <= 2 ? "warn" : "") + `</div>`).join(""))
+      : leer("Kein Vorrat erfasst – Kassenbon im Chat schicken");
   } else if (t === "rezepte" || t === "kochen") {
     const r = await werkzeug("rezepte_suchen", { vorrat: t === "kochen", anzahl: 20 });
     h += r.length ? karte(t === "kochen" ? "Passt zum Vorrat" : `${r.length} Rezepte`, r.map((x) =>
@@ -671,6 +693,9 @@ async function seiteIch() {
     icons.map((e, i) => tun(`<span style="font-size:22px">${e}</span>`, "gesundheit_erfassen", { [feld]: i + 1 })).join("") + `</div>`;
   let h = `<p><a href="#start" style="color:var(--akzent)">‹ Zurück</a></p>`;
   h += `<div class="karte" style="padding:4px 14px">${zeile("👕 Kleiderschrank", "Fotos, Outfit für heute", "›", "leise", 'data-seite="kleider"')}</div>`;
+  const tr = await werkzeug("ueberblick").then((u) => u.heute_ernaehrung).catch(() => null);
+  if (tr) h += karte("Heute getrunken & gegessen", zeile("💧 Getrunken", esc(tr.getrunken), tun("+250 ml", "gesundheit_erfassen", { getrunken_ml: 250 }) +
+      tun("+500 ml", "gesundheit_erfassen", { getrunken_ml: 500 })) + zeile("🍎 Obst", esc(tr.obst), "") + zeile("🥦 Gemüse", esc(tr.gemuese), ""));
   h += karte("Heute", `<p class="hinweis">Stimmung</p>` + sterne(0, "stimmung", ["😫", "😕", "😐", "🙂", "😄"]) +
     `<p class="hinweis">Energie</p>` + sterne(0, "energie", ["🪫", "😴", "😐", "⚡", "🚀"]) +
     `<p class="hinweis">Schlafqualität</p>` + sterne(0, "schlaf_qualitaet", ["😵", "🥱", "😐", "😌", "😴"]) +
@@ -925,6 +950,12 @@ document.addEventListener("click", async (ev) => {
   }
 }, true);
 
+document.addEventListener("input", (ev) => {
+  if (!ev.target.dataset || ev.target.dataset.suche !== "vorrat") return;
+  const q = ev.target.value.trim().toLowerCase();
+  document.querySelectorAll("[data-finde]").forEach((z) => { z.style.display = !q || z.dataset.finde.includes(q) ? "" : "none"; });
+});
+
 document.addEventListener("submit", async (ev) => {
   const f = ev.target.closest("[data-form]");
   if (!f) return;
@@ -949,6 +980,15 @@ document.addEventListener("submit", async (ev) => {
   } else if (f.dataset.form === "frage") {
     if (!(d.antwort || "").trim()) return toast("Antwort fehlt");
     [name, args, ok] = ["frage_beantworten", { id: d.id, antwort: d.antwort.trim() }, "Danke, gemerkt ✓"];
+  } else if (f.dataset.form === "vorrat") {
+    const m = parseFloat(String(d.menge).replace(",", "."));
+    if (!(d.produkt || "").trim() || !m) return toast("Produkt und Menge angeben");
+    [name, args, ok] = ["vorrat_buchen", { art: "zugang", produkt: d.produkt.trim(), menge: m, einheit: d.einheit }, "Im Vorrat ✓"];
+  } else if (f.dataset.form === "umbuchen") {
+    const cent = Math.round(parseFloat(String(d.betrag).replace(",", ".")) * 100);
+    if (!cent) return toast("Betrag fehlt");
+    if (d.von === d.nach) return toast("Von und nach sind gleich");
+    [name, args, ok] = ["umbuchung_erfassen", { von: d.von, nach: d.nach, betrag_cent: cent, ...(d.notiz ? { notiz: d.notiz } : {}) }, "Umgebucht ✓"];
   } else if (f.dataset.form === "buchen") {
     const cent = Math.round(parseFloat(String(d.betrag).replace(",", ".")) * 100);
     if (!cent) return toast("Betrag fehlt");
