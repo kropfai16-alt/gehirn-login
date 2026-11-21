@@ -527,6 +527,8 @@ async function seiteMehr() {
 async function seiteReisekarte() {
   $("#titel").textContent = "Reisekarte";
   const k = await werkzeug("reisekarte");
+  // „nur Land“ (z. B. Marokko ohne Ort) weglassen, sobald aus dem Land echte Orte bekannt sind
+  k.orte = k.orte.filter((o) => !(o.nur_land && k.orte.some((x) => !x.nur_land && x.land === o.land)));
   const mitPunkt = k.orte.filter((o) => o.lat != null && !o.nur_land);
   let h = `<div class="kacheln">` +
     `<div class="kachel"><div class="kw">${k.orte.length}</div><div class="hinweis">Orte</div></div>` +
@@ -655,7 +657,14 @@ async function reisekarteZeichnen() {
       .attr("vector-effect", "non-scaling-stroke").attr("filter", "url(#bleistift)");
     const namen = g.append("g").attr("font-family", "Caveat, 'Segoe Print', cursive").attr("fill", "#3b3226")
       .attr("stroke", "#f4ecd6").attr("stroke-width", 3).attr("paint-order", "stroke").attr("stroke-linejoin", "round");
-    const schrift = (k) => namen.selectAll("text").attr("font-size", 16 / k).attr("stroke-width", 3 / k);
+    // exakter Punkt je Ort (wie eine Bleistiftspitze) – der Name steht direkt über dem Fleck, egal wie weit gezoomt ist
+    const spitzen = g.append("g").selectAll("circle").data(orte).join("circle")
+      .attr("cx", (o) => proj([o.lon, o.lat])[0]).attr("cy", (o) => proj([o.lon, o.lat])[1]).attr("fill", "#3b3226");
+    const schrift = (k) => {
+      spitzen.attr("r", 1.5 / k);
+      namen.selectAll("text").attr("font-size", 16 / k).attr("stroke-width", 3 / k)
+        .attr("y", (o) => proj([o.lon, o.lat])[1] - (Math.max((o.umkreis_km || 8) * pxProKm * k, 7) + 4) / k);
+    };
     // Namen, die sich überdecken, ausblenden (Gemochtes zuerst) – beim Hineinzoomen erscheinen sie
     const entzerren = () => {
       const frei = [];
@@ -668,7 +677,7 @@ async function reisekarteZeichnen() {
     };
     namen.selectAll("text").data(orte).join("text").text((o) => o.ort.replace(/\s*\(.*\)/, ""))
       .attr("x", (o) => proj([o.lon, o.lat])[0]).attr("y", (o) => proj([o.lon, o.lat])[1]).attr("text-anchor", "middle")
-      .attr("dy", "-1.1em").attr("font-weight", 700);
+      .attr("font-weight", 700);
     schrift(1);
     entzerren();
     if (document.fonts) document.fonts.ready.then(entzerren);
