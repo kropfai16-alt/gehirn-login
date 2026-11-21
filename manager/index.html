@@ -533,7 +533,7 @@ async function seiteReisekarte() {
     `<div class="kachel"><div class="kw">${k.laender.length}</div><div class="hinweis">Länder</div></div></div>`;
   if (!k.orte.length) return h + leer("Noch keine Orte – im Chat: „Ich war schon in Prag und Budapest“");
   h += `<div id="reisekarte" data-orte="${esc(JSON.stringify(mitPunkt))}" style="height:62vh;min-height:340px;border-radius:14px;overflow:hidden;margin:12px 0 6px;background:#d9e4e1"></div>` +
-    `<p class="hinweis">Grün ausgemalt: gefallen · rot: Stadt nicht mein Ding · blau: sonst. Mit zwei Fingern zoomen – dann siehst du die echte Größe.</p>`;
+    `<p class="hinweis">Grün ausgemalt: gefallen · rot: Stadt nicht mein Ding · blau: sonst · zart gelb: Gegend, durch die du gereist bist. Mit zwei Fingern zoomen.</p>`;
   h += karte("Länder", k.laender.map((l) => zeile(esc(l.land), "", l.orte + (l.orte === 1 ? " Ort" : " Orte"))).join(""));
   h += karte("Orte", k.orte.map((o) => zeile((o.gefallen ? "🟢 " : o.stadt_meiden ? "🔴 " : "🔵 ") + esc(o.ort),
     [o.land, o.jahr, o.bewertung].filter(Boolean).map(esc).join(" · "), o.nur_land ? "Orte fehlen" : o.lat == null ? "ohne Karte" : "")).join(""));
@@ -574,7 +574,7 @@ function klecks(lon, lat, km, saat) {
   return { type: "Polygon", coordinates: [ring] };
 }
 
-const STIFTE = { g: "#3e9b58", r: "#d4524f", b: "#3c7fc0", land: "#e8b54a" };
+const STIFTE = { g: "#3e9b58", r: "#d4524f", b: "#3c7fc0", land: "#d2922a" };
 
 async function reisekarteZeichnen() {
   const el = document.getElementById("reisekarte");
@@ -604,8 +604,8 @@ async function reisekarteZeichnen() {
     for (const [k, c] of Object.entries(STIFTE)) {
       const pa = defs.append("pattern").attr("id", "stift-" + k).attr("patternUnits", "userSpaceOnUse")
         .attr("width", 5).attr("height", 5).attr("patternTransform", `rotate(${k === "land" ? -28 : 34})`);
-      pa.append("rect").attr("width", 5).attr("height", 5).attr("fill", c).attr("fill-opacity", k === "land" ? 0.12 : 0.3);
-      pa.append("rect").attr("width", k === "land" ? 1.6 : 2.8).attr("height", 5).attr("fill", c).attr("fill-opacity", k === "land" ? 0.45 : 0.78);
+      pa.append("rect").attr("width", 5).attr("height", 5).attr("fill", c).attr("fill-opacity", k === "land" ? 0.22 : 0.3);
+      pa.append("rect").attr("width", k === "land" ? 1.6 : 2.8).attr("height", 5).attr("fill", c).attr("fill-opacity", k === "land" ? 0.62 : 0.78);
     }
     // Buntstift: raue Ränder (Verschiebung) und Papierkörnung (Lücken im Strich)
     defs.append("filter").attr("id", "kreide").attr("x", "-15%").attr("y", "-15%").attr("width", "130%").attr("height", "130%")
@@ -621,6 +621,17 @@ async function reisekarteZeichnen() {
 
     const g = svg.append("g");
     g.append("path").datum(land).attr("d", pfad).attr("fill", "#f4ecd6");
+    // Gegenden: Orte, die nah beieinander liegen (gleiche Reise, bis ca. 85 km), bekommen eine zart ausgemalte gemeinsame Fläche
+    const kmZw = (a, b) => d3.geoDistance([a.lon, a.lat], [b.lon, b.lat]) * 6371;
+    const gruppe = orte.map((_, i) => i);
+    const wurzel = (i) => gruppe[i] === i ? i : (gruppe[i] = wurzel(gruppe[i]));
+    orte.forEach((a, i) => orte.forEach((b, k) => { if (k > i && kmZw(a, b) <= 85) gruppe[wurzel(i)] = wurzel(k); }));
+    const gegenden = d3.groups(orte, (o) => wurzel(orte.indexOf(o))).map(([, liste]) => liste).filter((l) => l.length > 1)
+      .map((l) => d3.polygonHull(l.flatMap((o, i) => klecks(o.lon, o.lat, Math.max(o.umkreis_km || 8, 12), 0.7 + i).coordinates[0].map(proj))))
+      .filter(Boolean);
+    g.append("g").attr("clip-path", "url(#landform)").append("g").attr("filter", "url(#kreide)")
+      .selectAll("path").data(gegenden).join("path").attr("fill", "url(#stift-land)")
+      .attr("d", d3.line().curve(d3.curveCatmullRomClosed.alpha(0.6)));
     const flecken = g.append("g").attr("filter", "url(#kreide)");
     // Fleck in echter Größe (Stadt ~8 km, Inseln/Regionen laut umkreis_km); beim Herauszoomen bleibt er als kleiner Tupfer sichtbar
     const mitte = punkte[0] || [10, 48], pxProKm = Math.abs(proj([mitte[0], mitte[1] + 1])[1] - proj(mitte)[1]) / 111;
