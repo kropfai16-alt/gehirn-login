@@ -527,16 +527,16 @@ async function seiteMehr() {
 async function seiteReisekarte() {
   $("#titel").textContent = "Reisekarte";
   const k = await werkzeug("reisekarte");
-  const mitPunkt = k.orte.filter((o) => o.lat != null);
+  const mitPunkt = k.orte.filter((o) => o.lat != null && !o.nur_land);
   let h = `<div class="kacheln">` +
     `<div class="kachel"><div class="kw">${k.orte.length}</div><div class="hinweis">Orte</div></div>` +
     `<div class="kachel"><div class="kw">${k.laender.length}</div><div class="hinweis">Länder</div></div></div>`;
   if (!k.orte.length) return h + leer("Noch keine Orte – im Chat: „Ich war schon in Prag und Budapest“");
   h += `<div id="reisekarte" data-orte="${esc(JSON.stringify(mitPunkt))}" style="height:62vh;min-height:340px;border-radius:14px;overflow:hidden;margin:12px 0 6px;background:#d9e4e1"></div>` +
-    `<p class="hinweis">Grün ausgemalt: gefallen · rot: Stadt nicht mein Ding · blau: sonst · gelb schraffiert: besuchte Länder. Mit zwei Fingern zoomen.</p>`;
+    `<p class="hinweis">Grün ausgemalt: gefallen · rot: Stadt nicht mein Ding · blau: sonst. Mit zwei Fingern zoomen – dann siehst du die echte Größe.</p>`;
   h += karte("Länder", k.laender.map((l) => zeile(esc(l.land), "", l.orte + (l.orte === 1 ? " Ort" : " Orte"))).join(""));
   h += karte("Orte", k.orte.map((o) => zeile((o.gefallen ? "🟢 " : o.stadt_meiden ? "🔴 " : "🔵 ") + esc(o.ort),
-    [o.land, o.jahr, o.bewertung].filter(Boolean).map(esc).join(" · "), o.lat == null ? "ohne Karte" : "")).join(""));
+    [o.land, o.jahr, o.bewertung].filter(Boolean).map(esc).join(" · "), o.nur_land ? "Orte fehlen" : o.lat == null ? "ohne Karte" : "")).join(""));
   return h;
 }
 
@@ -609,30 +609,34 @@ async function reisekarteZeichnen() {
     }
     // Buntstift: raue Ränder (Verschiebung) und Papierkörnung (Lücken im Strich)
     defs.append("filter").attr("id", "kreide").attr("x", "-15%").attr("y", "-15%").attr("width", "130%").attr("height", "130%")
-      .html(`<feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="3" result="n"/>
-        <feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G" result="d"/>
-        <feTurbulence type="fractalNoise" baseFrequency="1.7" numOctaves="1" seed="8" result="k"/>
+      .html(`<feTurbulence id="kn" type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="3" result="n"/>
+        <feDisplacementMap id="kd" in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G" result="d"/>
+        <feTurbulence id="kk" type="fractalNoise" baseFrequency="1.7" numOctaves="1" seed="8" result="k"/>
         <feColorMatrix in="k" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.4 1.75" result="maske"/>
         <feComposite in="d" in2="maske" operator="in"/>`);
     defs.append("filter").attr("id", "bleistift").html(
-      `<feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="5" result="n"/>
-       <feDisplacementMap in="SourceGraphic" in2="n" scale="1.6" xChannelSelector="R" yChannelSelector="G"/>`);
+      `<feTurbulence id="bn" type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="5" result="n"/>
+       <feDisplacementMap id="bd" in="SourceGraphic" in2="n" scale="1.6" xChannelSelector="R" yChannelSelector="G"/>`);
     defs.append("clipPath").attr("id", "landform").append("path").datum(land).attr("d", pfad);
 
     const g = svg.append("g");
     g.append("path").datum(land).attr("d", pfad).attr("fill", "#f4ecd6");
-    const besucht = laender.filter((f) => punkte.some((p) => d3.geoContains(f, p)));
-    g.append("g").attr("filter", "url(#kreide)").selectAll("path").data(besucht).join("path")
-      .attr("d", pfad).attr("fill", "url(#stift-land)");
-    const flecken = g.append("g").attr("clip-path", "url(#landform)").append("g").attr("filter", "url(#kreide)");
-    // Fleckgröße: mind. 35 km, im Startausschnitt aber gut sichtbar (ca. 22 px Radius)
+    const flecken = g.append("g").attr("filter", "url(#kreide)");
+    // Fleck in echter Größe (Stadt ~8 km, Inseln/Regionen laut umkreis_km); beim Herauszoomen bleibt er als kleiner Tupfer sichtbar
     const mitte = punkte[0] || [10, 48], pxProKm = Math.abs(proj([mitte[0], mitte[1] + 1])[1] - proj(mitte)[1]) / 111;
-    const km = Math.max(35, 22 / Math.max(pxProKm, 1e-6));
     const rang = (o) => o.gefallen ? 2 : o.stadt_meiden ? 0 : 1;   // Gemochtes zuletzt = obenauf
-    [...orte].sort((a, b) => rang(a) - rang(b)).forEach((o, i) => {
-      const k = o.gefallen ? "g" : o.stadt_meiden ? "r" : "b";
-      flecken.append("path").datum(klecks(o.lon, o.lat, km, 1.3 + i * 2.1)).attr("d", pfad).attr("fill", `url(#stift-${k})`);
-    });
+    const sortiert = [...orte].sort((a, b) => rang(a) - rang(b));
+    const fleckPfade = flecken.selectAll("path").data(sortiert).join("path")
+      .attr("fill", (o) => `url(#stift-${o.gefallen ? "g" : o.stadt_meiden ? "r" : "b"})`);
+    const malen = (zoom) => {
+      fleckPfade.attr("d", (o, i) => pfad(klecks(o.lon, o.lat, Math.max(o.umkreis_km || 8, 7 / (pxProKm * zoom)), 1.3 + i * 2.1)));
+      // Strichbreite und Körnung bleiben auf dem Bildschirm gleich (wie ein echter Stift), egal wie weit gezoomt ist
+      for (const k of Object.keys(STIFTE)) defs.select("#stift-" + k).attr("patternTransform", `rotate(${k === "land" ? -28 : 34}) scale(${1 / zoom})`);
+      defs.select("#kn").attr("baseFrequency", 0.85 * zoom); defs.select("#kk").attr("baseFrequency", 1.7 * zoom);
+      defs.select("#kd").attr("scale", 5 / zoom);
+      defs.select("#bn").attr("baseFrequency", 0.05 * zoom); defs.select("#bd").attr("scale", 1.6 / zoom);
+    };
+    malen(1);
     g.append("path").datum(topo.mesh(welt, welt.objects.countries, (a, b) => a !== b)).attr("d", pfad)
       .attr("fill", "none").attr("stroke", "#9a8c74").attr("stroke-width", 0.7).attr("stroke-dasharray", "3 1.5")
       .attr("vector-effect", "non-scaling-stroke").attr("filter", "url(#bleistift)");
@@ -640,12 +644,25 @@ async function reisekarteZeichnen() {
       .attr("vector-effect", "non-scaling-stroke").attr("filter", "url(#bleistift)");
     const namen = g.append("g").attr("font-family", "Caveat, 'Segoe Print', cursive").attr("fill", "#3b3226")
       .attr("stroke", "#f4ecd6").attr("stroke-width", 3).attr("paint-order", "stroke").attr("stroke-linejoin", "round");
-    const schrift = (k) => namen.selectAll("text").attr("font-size", 17 / k).attr("stroke-width", 3 / k);
+    const schrift = (k) => namen.selectAll("text").attr("font-size", 16 / k).attr("stroke-width", 3 / k);
+    // Namen, die sich überdecken, ausblenden (Gemochtes zuerst) – beim Hineinzoomen erscheinen sie
+    const entzerren = () => {
+      const frei = [];
+      namen.selectAll("text").sort((a, b) => rang(b) - rang(a)).each(function () {
+        const r = this.getBoundingClientRect();
+        const stoesst = frei.some((q) => r.left < q.right && r.right > q.left && r.top < q.bottom && r.bottom > q.top);
+        this.style.opacity = stoesst ? 0 : 1;
+        if (!stoesst) frei.push(r);
+      });
+    };
     namen.selectAll("text").data(orte).join("text").text((o) => o.ort.replace(/\s*\(.*\)/, ""))
       .attr("x", (o) => proj([o.lon, o.lat])[0]).attr("y", (o) => proj([o.lon, o.lat])[1]).attr("text-anchor", "middle")
       .attr("dy", "-1.1em").attr("font-weight", 700);
     schrift(1);
-    svg.call(d3.zoom().scaleExtent([0.25, 20]).on("zoom", (e) => { g.attr("transform", e.transform); schrift(e.transform.k); }));
+    entzerren();
+    if (document.fonts) document.fonts.ready.then(entzerren);
+    svg.call(d3.zoom().scaleExtent([0.25, 60]).on("zoom", (e) => { g.attr("transform", e.transform); schrift(e.transform.k); })
+      .on("end", (e) => { malen(e.transform.k); entzerren(); }));
   } catch (e) {
     el.innerHTML = `<p class="hinweis" style="padding:16px">${esc(e.message)} – die Liste unten ist trotzdem vollständig.</p>`;
   }
