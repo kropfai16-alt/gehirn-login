@@ -322,7 +322,7 @@ function cacheMerken(key, h, titel) {
   try { localStorage.setItem(SEITEN_KEY, JSON.stringify(seitenCache)); } catch { seitenCache = { [key]: seitenCache[key] }; }
 }
 const SEITEN = () => ({ start: seiteStart, geld: seiteGeld, kueche: seiteKueche, filme: seiteFilme, rezept: seiteRezept, faehig: seiteFaehig, sport: seiteSport,
-  leute: seiteLeute, urlaub: seiteUrlaub, ich: seiteIch, woche: seiteWoche, kleider: seiteKleider, mitbringsel: seiteMitbringsel, mehr: seiteMehr, suche: seiteSuche });
+  leute: seiteLeute, urlaub: seiteUrlaub, ich: seiteIch, woche: seiteWoche, kleider: seiteKleider, mitbringsel: seiteMitbringsel, mehr: seiteMehr, suche: seiteSuche, reisekarte: seiteReisekarte });
 let lauf = 0;
 async function zeigen() {
   const sprung = seite === "start" && unter.start;   // Kachel „Budget“ springt auf der Startseite zur Budget-Karte
@@ -332,7 +332,7 @@ async function zeigen() {
   const inNav = ["start", "geld", "kueche", "filme"].includes(seite);
   document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("an", b.dataset.seite === (inNav ? seite : "mehr")));
   const ziel = $("#inhalt");
-  const setzen = (h) => { ziel.innerHTML = h; chatLinksSetzen(ziel); };
+  const setzen = (h) => { ziel.innerHTML = h; chatLinksSetzen(ziel); reisekarteZeichnen(); };
   const alt = seitenCache[key];
   if (alt) { setzen(alt.h); $("#titel").textContent = alt.t; springen(); } else ziel.classList.add("laden");
   try {
@@ -511,6 +511,7 @@ async function seiteMehr() {
     feld("🏃", "Sport", "Plan, Programm, Fortschritt", 'data-seite="sport"') +
     feld("🧘", "Ich & Gesundheit", "Schlaf, Trinken, Tagebuch", 'data-seite="ich"') +
     feld("✈️", "Urlaub & Reisen", "Resturlaub, Flüge, Reisen", 'data-seite="urlaub"') +
+    feld("🗺️", "Reisekarte", "wo du schon überall warst", 'data-seite="reisekarte"') +
     feld("🎁", "Mitbringsel", "Erinnerungen mit Foto", 'data-seite="mitbringsel"') +
     feld("👕", "Kleiderschrank", "Fotos, Outfit für heute", 'data-seite="kleider"') +
     feld("👥", "Freunde & Familie", "Geburtstage, Geschenke", 'data-leute=""') +
@@ -520,6 +521,69 @@ async function seiteMehr() {
     `<div style="font-weight:600;margin-top:4px">Manager-Chat</div><div class="hinweis" style="margin-top:2px">neuen Chat öffnen</div></a>` +
     `</div><p class="hinweis" style="text-align:center;margin:18px 0 6px">Tipp: Der ＋-Knopf unten rechts trägt Ausgaben, Einkäufe und Getränke in zwei Tipps ein.</p>` +
     `<button class="knopf" style="background:var(--karte2);color:var(--leise)" id="abmelden2">Abmelden</button>`;
+}
+
+// Reisekarte: besuchte Orte auf der Karte (Leaflet, Karte von CARTO/OpenStreetMap) und die Länder
+async function seiteReisekarte() {
+  $("#titel").textContent = "Reisekarte";
+  const k = await werkzeug("reisekarte");
+  const mitPunkt = k.orte.filter((o) => o.lat != null);
+  let h = `<div class="kacheln">` +
+    `<div class="kachel"><div class="kw">${k.orte.length}</div><div class="hinweis">Orte</div></div>` +
+    `<div class="kachel"><div class="kw">${k.laender.length}</div><div class="hinweis">Länder</div></div></div>`;
+  if (!k.orte.length) return h + leer("Noch keine Orte – im Chat: „Ich war schon in Prag und Budapest“");
+  h += `<div id="reisekarte" data-orte="${esc(JSON.stringify(mitPunkt))}" style="height:58vh;min-height:320px;border-radius:14px;overflow:hidden;margin:12px 0 6px;background:var(--karte2)"></div>` +
+    `<p class="hinweis">🟢 gefallen · 🔴 Stadt nicht mein Ding · 🔵 sonst</p>`;
+  h += karte("Länder", k.laender.map((l) => zeile(esc(l.land), "", l.orte + (l.orte === 1 ? " Ort" : " Orte"))).join(""));
+  h += karte("Orte", k.orte.map((o) => zeile((o.gefallen ? "🟢 " : o.stadt_meiden ? "🔴 " : "🔵 ") + esc(o.ort),
+    [o.land, o.jahr, o.bewertung].filter(Boolean).map(esc).join(" · "), o.lat == null ? "ohne Karte" : "")).join(""));
+  return h;
+}
+
+let leafletLaden = null;
+function leaflet() {
+  if (window.L) return Promise.resolve(window.L);
+  leafletLaden ||= new Promise((ok, fehler) => {
+    const css = document.createElement("link");
+    css.rel = "stylesheet"; css.href = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
+    document.head.appendChild(css);
+    const js = document.createElement("script");
+    js.src = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
+    js.onload = () => ok(window.L);
+    js.onerror = () => { leafletLaden = null; fehler(new Error("Karte konnte nicht geladen werden")); };
+    document.head.appendChild(js);
+  });
+  return leafletLaden;
+}
+
+let reisekarteObj = null;
+async function reisekarteZeichnen() {
+  const el = document.getElementById("reisekarte");
+  if (!el) return;
+  let orte = [];
+  try { orte = JSON.parse(el.dataset.orte || "[]"); } catch { /* leer */ }
+  try {
+    const L = await leaflet();
+    if (!document.body.contains(el)) return;   // inzwischen andere Seite
+    if (reisekarteObj) { reisekarteObj.remove(); reisekarteObj = null; }
+    const m = L.map(el, { worldCopyJump: true, zoomControl: true, attributionControl: true });
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+      maxZoom: 18, subdomains: "abcd", referrerPolicy: "strict-origin-when-cross-origin",
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    }).addTo(m);
+    const punkte = orte.map((o) => {
+      const farbe = o.gefallen ? "#3fb950" : o.stadt_meiden ? "#f85149" : "#58a6ff";
+      L.circleMarker([o.lat, o.lon], { radius: 7, color: "#0A0C10", weight: 1.5, fillColor: farbe, fillOpacity: 0.95 }).addTo(m)
+        .bindPopup(`<b>${esc(o.ort)}</b>${o.land ? ", " + esc(o.land) : ""}${o.jahr ? " (" + o.jahr + ")" : ""}` +
+                   (o.bewertung ? `<br><span style="font-size:12px">${esc(o.bewertung)}</span>` : ""));
+      return [o.lat, o.lon];
+    });
+    if (punkte.length > 1) m.fitBounds(punkte, { padding: [30, 30], maxZoom: 7 });
+    else m.setView(punkte[0] || [48.5, 11.5], punkte.length ? 7 : 4);
+    reisekarteObj = m;
+  } catch (e) {
+    el.innerHTML = `<p class="hinweis" style="padding:16px">${esc(e.message)} – die Liste unten ist trotzdem vollständig.</p>`;
+  }
 }
 
 // Suche über alle Bereiche
