@@ -532,55 +532,120 @@ async function seiteReisekarte() {
     `<div class="kachel"><div class="kw">${k.orte.length}</div><div class="hinweis">Orte</div></div>` +
     `<div class="kachel"><div class="kw">${k.laender.length}</div><div class="hinweis">Länder</div></div></div>`;
   if (!k.orte.length) return h + leer("Noch keine Orte – im Chat: „Ich war schon in Prag und Budapest“");
-  h += `<div id="reisekarte" data-orte="${esc(JSON.stringify(mitPunkt))}" style="height:58vh;min-height:320px;border-radius:14px;overflow:hidden;margin:12px 0 6px;background:var(--karte2)"></div>` +
-    `<p class="hinweis">🟢 gefallen · 🔴 Stadt nicht mein Ding · 🔵 sonst</p>`;
+  h += `<div id="reisekarte" data-orte="${esc(JSON.stringify(mitPunkt))}" style="height:62vh;min-height:340px;border-radius:14px;overflow:hidden;margin:12px 0 6px;background:#d9e4e1"></div>` +
+    `<p class="hinweis">Grün ausgemalt: gefallen · rot: Stadt nicht mein Ding · blau: sonst · gelb schraffiert: besuchte Länder. Mit zwei Fingern zoomen.</p>`;
   h += karte("Länder", k.laender.map((l) => zeile(esc(l.land), "", l.orte + (l.orte === 1 ? " Ort" : " Orte"))).join(""));
   h += karte("Orte", k.orte.map((o) => zeile((o.gefallen ? "🟢 " : o.stadt_meiden ? "🔴 " : "🔵 ") + esc(o.ort),
     [o.land, o.jahr, o.bewertung].filter(Boolean).map(esc).join(" · "), o.lat == null ? "ohne Karte" : "")).join(""));
   return h;
 }
 
-let leafletLaden = null;
-function leaflet() {
-  if (window.L) return Promise.resolve(window.L);
-  leafletLaden ||= new Promise((ok, fehler) => {
-    const css = document.createElement("link");
-    css.rel = "stylesheet"; css.href = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
-    document.head.appendChild(css);
-    const js = document.createElement("script");
-    js.src = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
-    js.onload = () => ok(window.L);
-    js.onerror = () => { leafletLaden = null; fehler(new Error("Karte konnte nicht geladen werden")); };
-    document.head.appendChild(js);
+// Gezeichnete Landkarte: Papier, Bleistiftgrenzen, besuchte Gegenden mit Buntstift ausgemalt (d3-geo + Natural-Earth-Daten)
+let kartenLaden = null;
+function kartenBibliotheken() {
+  const skript = (src) => new Promise((ok, fehler) => {
+    const s = document.createElement("script");
+    s.src = src; s.onload = ok; s.onerror = () => fehler(new Error("Karte konnte nicht geladen werden"));
+    document.head.appendChild(s);
   });
-  return leafletLaden;
+  kartenLaden ||= (async () => {
+    if (!document.getElementById("handschrift")) {
+      const f = document.createElement("link");
+      f.id = "handschrift"; f.rel = "stylesheet"; f.href = "https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&display=swap";
+      document.head.appendChild(f);
+    }
+    if (!window.d3) await skript("https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js");
+    if (!window.topojson) await skript("https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js");
+    const r = await fetch("https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-50m.json");
+    if (!r.ok) throw new Error("Kartendaten nicht erreichbar");
+    return await r.json();
+  })().catch((e) => { kartenLaden = null; throw e; });
+  return kartenLaden;
 }
 
-let reisekarteObj = null;
+// Unregelmäßiger „Klecks“ um einen Ort – wie von Hand ausgemalt (Ring im Uhrzeigersinn, wie d3-geo es erwartet)
+function klecks(lon, lat, km, saat) {
+  const n = 56, r0 = km / 111, ring = [];
+  for (let i = n; i >= 0; i--) {
+    const a = 2 * Math.PI * i / n;
+    const r = r0 * (1 + 0.17 * Math.sin(3 * a + saat) + 0.09 * Math.sin(5 * a + saat * 1.7) + 0.05 * Math.sin(9 * a + saat * 2.3));
+    ring.push([lon + r * Math.cos(a) / Math.cos(lat * Math.PI / 180), lat + r * Math.sin(a)]);
+  }
+  return { type: "Polygon", coordinates: [ring] };
+}
+
+const STIFTE = { g: "#3e9b58", r: "#d4524f", b: "#3c7fc0", land: "#e8b54a" };
+
 async function reisekarteZeichnen() {
   const el = document.getElementById("reisekarte");
   if (!el) return;
   let orte = [];
   try { orte = JSON.parse(el.dataset.orte || "[]"); } catch { /* leer */ }
   try {
-    const L = await leaflet();
+    const welt = await kartenBibliotheken();
     if (!document.body.contains(el)) return;   // inzwischen andere Seite
-    if (reisekarteObj) { reisekarteObj.remove(); reisekarteObj = null; }
-    const m = L.map(el, { worldCopyJump: true, zoomControl: true, attributionControl: true });
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-      maxZoom: 18, subdomains: "abcd", referrerPolicy: "strict-origin-when-cross-origin",
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    }).addTo(m);
-    const punkte = orte.map((o) => {
-      const farbe = o.gefallen ? "#3fb950" : o.stadt_meiden ? "#f85149" : "#58a6ff";
-      L.circleMarker([o.lat, o.lon], { radius: 7, color: "#0A0C10", weight: 1.5, fillColor: farbe, fillOpacity: 0.95 }).addTo(m)
-        .bindPopup(`<b>${esc(o.ort)}</b>${o.land ? ", " + esc(o.land) : ""}${o.jahr ? " (" + o.jahr + ")" : ""}` +
-                   (o.bewertung ? `<br><span style="font-size:12px">${esc(o.bewertung)}</span>` : ""));
-      return [o.lat, o.lon];
+    const d3 = window.d3, topo = window.topojson;
+    el.innerHTML = "";
+    const w = el.clientWidth, h = el.clientHeight;
+    const laender = topo.feature(welt, welt.objects.countries).features;
+    const land = topo.feature(welt, welt.objects.land);
+    const punkte = orte.map((o) => [o.lon, o.lat]);
+    // Ausschnitt: alle Orte mit etwas Rand, mindestens etwa Europa-Ausschnitt-Größe
+    const lons = punkte.map((p) => p[0]), lats = punkte.map((p) => p[1]);
+    const rand = (a, b, min) => { const m = (a + b) / 2, d = Math.max(b - a, min) / 2 * 1.35; return [m - d, m + d]; };
+    const [x0, x1] = punkte.length ? rand(Math.min(...lons), Math.max(...lons), 12) : [-12, 35];
+    const [y0, y1] = punkte.length ? rand(Math.min(...lats), Math.max(...lats), 8) : [35, 62];
+    const proj = d3.geoMercator().fitExtent([[12, 12], [w - 12, h - 12]],
+      { type: "MultiPoint", coordinates: [[x0, y0], [x1, y1], [x0, y1], [x1, y0]] });
+    const pfad = d3.geoPath(proj);
+
+    const svg = d3.select(el).append("svg").attr("width", w).attr("height", h).style("display", "block").style("touch-action", "none");
+    const defs = svg.append("defs");
+    for (const [k, c] of Object.entries(STIFTE)) {
+      const pa = defs.append("pattern").attr("id", "stift-" + k).attr("patternUnits", "userSpaceOnUse")
+        .attr("width", 5).attr("height", 5).attr("patternTransform", `rotate(${k === "land" ? -28 : 34})`);
+      pa.append("rect").attr("width", 5).attr("height", 5).attr("fill", c).attr("fill-opacity", k === "land" ? 0.12 : 0.3);
+      pa.append("rect").attr("width", k === "land" ? 1.6 : 2.8).attr("height", 5).attr("fill", c).attr("fill-opacity", k === "land" ? 0.45 : 0.78);
+    }
+    // Buntstift: raue Ränder (Verschiebung) und Papierkörnung (Lücken im Strich)
+    defs.append("filter").attr("id", "kreide").attr("x", "-15%").attr("y", "-15%").attr("width", "130%").attr("height", "130%")
+      .html(`<feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="3" result="n"/>
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G" result="d"/>
+        <feTurbulence type="fractalNoise" baseFrequency="1.7" numOctaves="1" seed="8" result="k"/>
+        <feColorMatrix in="k" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.4 1.75" result="maske"/>
+        <feComposite in="d" in2="maske" operator="in"/>`);
+    defs.append("filter").attr("id", "bleistift").html(
+      `<feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="5" result="n"/>
+       <feDisplacementMap in="SourceGraphic" in2="n" scale="1.6" xChannelSelector="R" yChannelSelector="G"/>`);
+    defs.append("clipPath").attr("id", "landform").append("path").datum(land).attr("d", pfad);
+
+    const g = svg.append("g");
+    g.append("path").datum(land).attr("d", pfad).attr("fill", "#f4ecd6");
+    const besucht = laender.filter((f) => punkte.some((p) => d3.geoContains(f, p)));
+    g.append("g").attr("filter", "url(#kreide)").selectAll("path").data(besucht).join("path")
+      .attr("d", pfad).attr("fill", "url(#stift-land)");
+    const flecken = g.append("g").attr("clip-path", "url(#landform)").append("g").attr("filter", "url(#kreide)");
+    // Fleckgröße: mind. 35 km, im Startausschnitt aber gut sichtbar (ca. 22 px Radius)
+    const mitte = punkte[0] || [10, 48], pxProKm = Math.abs(proj([mitte[0], mitte[1] + 1])[1] - proj(mitte)[1]) / 111;
+    const km = Math.max(35, 22 / Math.max(pxProKm, 1e-6));
+    const rang = (o) => o.gefallen ? 2 : o.stadt_meiden ? 0 : 1;   // Gemochtes zuletzt = obenauf
+    [...orte].sort((a, b) => rang(a) - rang(b)).forEach((o, i) => {
+      const k = o.gefallen ? "g" : o.stadt_meiden ? "r" : "b";
+      flecken.append("path").datum(klecks(o.lon, o.lat, km, 1.3 + i * 2.1)).attr("d", pfad).attr("fill", `url(#stift-${k})`);
     });
-    if (punkte.length > 1) m.fitBounds(punkte, { padding: [30, 30], maxZoom: 7 });
-    else m.setView(punkte[0] || [48.5, 11.5], punkte.length ? 7 : 4);
-    reisekarteObj = m;
+    g.append("path").datum(topo.mesh(welt, welt.objects.countries, (a, b) => a !== b)).attr("d", pfad)
+      .attr("fill", "none").attr("stroke", "#9a8c74").attr("stroke-width", 0.7).attr("stroke-dasharray", "3 1.5")
+      .attr("vector-effect", "non-scaling-stroke").attr("filter", "url(#bleistift)");
+    g.append("path").datum(land).attr("d", pfad).attr("fill", "none").attr("stroke", "#7b6c55").attr("stroke-width", 1.1)
+      .attr("vector-effect", "non-scaling-stroke").attr("filter", "url(#bleistift)");
+    const namen = g.append("g").attr("font-family", "Caveat, 'Segoe Print', cursive").attr("fill", "#3b3226")
+      .attr("stroke", "#f4ecd6").attr("stroke-width", 3).attr("paint-order", "stroke").attr("stroke-linejoin", "round");
+    const schrift = (k) => namen.selectAll("text").attr("font-size", 17 / k).attr("stroke-width", 3 / k);
+    namen.selectAll("text").data(orte).join("text").text((o) => o.ort.replace(/\s*\(.*\)/, ""))
+      .attr("x", (o) => proj([o.lon, o.lat])[0]).attr("y", (o) => proj([o.lon, o.lat])[1]).attr("text-anchor", "middle")
+      .attr("dy", "-1.1em").attr("font-weight", 700);
+    schrift(1);
+    svg.call(d3.zoom().scaleExtent([0.25, 20]).on("zoom", (e) => { g.attr("transform", e.transform); schrift(e.transform.k); }));
   } catch (e) {
     el.innerHTML = `<p class="hinweis" style="padding:16px">${esc(e.message)} – die Liste unten ist trotzdem vollständig.</p>`;
   }
