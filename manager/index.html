@@ -972,7 +972,11 @@ async function seiteKleider() {
     `<div style="display:flex;gap:10px;flex-wrap:wrap">` + o.teile.map((t) => `<div style="width:76px;text-align:center">${bildKachel(nachId[t.id] || t, 76)}` +
       `<div class="hinweis" style="margin-top:4px">${esc(t.name)}</div></div>`).join("") + `</div>` +
     `<p class="hinweis">Passt gut zusammen oder gar nicht? Sag es im Manager-Chat – ich lerne daraus.</p>`);
-  if (s.ohne_foto) h += `<p class="hinweis">${s.ohne_foto} Teil(e) ohne Foto – tipp auf 📷, um eins aufzunehmen.</p>`;
+  if ((s.foto_wunsch || []).length) h += karte("📸 Diesen Monat bitte fotografieren", s.foto_wunsch.map((t) =>
+    `<div class="zeile" style="align-items:center;gap:10px"><div class="l">${esc(t.name)}<div class="hinweis">${esc(t.grund)}</div></div>` +
+    `<label class="mini" style="cursor:pointer">📷<input type="file" accept="image/*" capture="environment" data-foto="${esc(t.id)}" style="display:none"></label></div>`).join("") +
+    `<p class="hinweis">Mehr braucht es nicht: Der Manager schaut sich die Fotos beim monatlichen Kleider-Check an und sagt dir, was ersetzt werden sollte.</p>`);
+  else if (s.ohne_foto) h += `<p class="hinweis">${s.ohne_foto} Teil(e) ohne Foto – tipp auf 📷, um eins aufzunehmen.</p>`;
   const gruppen = {};
   for (const t of s.teile) (gruppen[t.kategorie] ||= []).push(t);
   for (const [k, liste] of Object.entries(gruppen)) {
